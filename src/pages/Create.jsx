@@ -1,12 +1,17 @@
 import { useState } from "react";
 
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const WEBHOOK_URL = "http://localhost:5678/webhook/reel-generator";
+// Change the above to your actual n8n webhook URL when deploying
+// ──────────────────────────────────────────────────────────────────────────────
+
 const ART_STYLES = [
-  { name: "Realistic",    thumb: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&q=80" },
-  { name: "Anime",        thumb: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&q=80" },
-  { name: "Fantasy Art",  thumb: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&q=80" },
-  { name: "Cyberpunk",    thumb: "https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=200&q=80" },
-  { name: "Watercolor",   thumb: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=200&q=80" },
-  { name: "Sketch",       thumb: "https://images.unsplash.com/photo-1551913902-c92207136625?w=200&q=80" },
+  { name: "Realistic",   thumb: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&q=80" },
+  { name: "Anime",       thumb: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&q=80" },
+  { name: "Fantasy Art", thumb: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&q=80" },
+  { name: "Cyberpunk",   thumb: "https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=200&q=80" },
+  { name: "Watercolor",  thumb: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=200&q=80" },
+  { name: "Sketch",      thumb: "https://images.unsplash.com/photo-1551913902-c92207136625?w=200&q=80" },
 ];
 
 const SCENES = [
@@ -17,6 +22,12 @@ const SCENES = [
   "Mountains",
   "Desert Dunes",
 ];
+
+// Maps "15 seconds" → number of scenes (approx 1 scene per 3 seconds)
+function durationToSceneCount(duration) {
+  const secs = parseInt(duration);
+  return Math.max(3, Math.round(secs / 3));
+}
 
 function Toggle({ on, onChange }) {
   return (
@@ -60,27 +71,140 @@ function SelectInput({ value, options, onChange }) {
   );
 }
 
+// ─── Loading Steps Component ───────────────────────────────────────────────────
+const LOADING_STEPS = [
+  "Writing scene prompts with AI",
+  "Refining prompts for image quality",
+  "Generating images with FLUX",
+  "Stitching frames into video",
+  "Finalizing your reel",
+];
+
+function LoadingSteps({ currentStep }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", padding: "0 16px" }}>
+      {LOADING_STEPS.map((label, i) => {
+        const done   = i < currentStep;
+        const active = i === currentStep;
+        return (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 10, fontWeight: 700,
+              background: done ? "#7c3aed" : active ? "#3b82f6" : "#e5e7eb",
+              color: done || active ? "#fff" : "#9ca3af",
+              transition: "all 0.3s",
+            }}>
+              {done ? "✓" : i + 1}
+            </div>
+            <span style={{
+              fontSize: 12,
+              color: done ? "#7c3aed" : active ? "#1a1a2e" : "#9ca3af",
+              fontWeight: active ? 600 : 400,
+              transition: "color 0.3s",
+            }}>{label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Create() {
-  const [prompt, setPrompt]       = useState("");
-  const [artStyle, setArtStyle]   = useState("Realistic");
-  const [scene, setScene]         = useState("Sunset Beach");
-  const [duration, setDuration]   = useState("15 seconds");
-  const [ratio, setRatio]         = useState("9:16 (Vertical)");
-  const [speed, setSpeed]         = useState(50);
-  const [captions, setCaptions]   = useState(true);
-  const [music, setMusic]         = useState(true);
-  const [hashtags, setHashtags]   = useState(true);
+  const [prompt, setPrompt]         = useState("");
+  const [artStyle, setArtStyle]     = useState("Realistic");
+  const [scene, setScene]           = useState("Sunset Beach");
+  const [duration, setDuration]     = useState("15 seconds");
+  const [ratio, setRatio]           = useState("9:16 (Vertical)");
+  const [speed, setSpeed]           = useState(50);
+  const [captions, setCaptions]     = useState(true);
+  const [music, setMusic]           = useState(true);
+  const [hashtags, setHashtags]     = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState(false);
+  const [videoUrl, setVideoUrl]     = useState(null);
+  const [error, setError]           = useState(null);
+  const [loadingStep, setLoadingStep] = useState(0);
 
-  const handleGenerate = () => {
+  // Simulate step progress during generation
+  const startStepTimer = () => {
+    const timings = [6000, 14000, 45000, 20000]; // ms per step
+    let step = 0;
+    const advance = () => {
+      step += 1;
+      setLoadingStep(step);
+      if (step < LOADING_STEPS.length - 1) {
+        setTimeout(advance, timings[step] || 10000);
+      }
+    };
+    setTimeout(advance, timings[0]);
+  };
+
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
+
     setGenerating(true);
     setGenerated(false);
-    setTimeout(() => {
+    setVideoUrl(null);
+    setError(null);
+    setLoadingStep(0);
+
+    startStepTimer();
+
+    // Map ratio string → short key for n8n
+    const aspectRatioMap = {
+      "9:16 (Vertical)":   "portrait",
+      "16:9 (Horizontal)": "landscape",
+      "1:1 (Square)":      "square",
+    };
+
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          theme:       scene,
+          style:       artStyle,
+          mood:        "cinematic",
+          sceneCount:  durationToSceneCount(duration),
+          sceneLength: 3,
+          aspectRatio: aspectRatioMap[ratio] || "portrait",
+          captions,
+          music,
+          hashtags,
+          speed,
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Webhook error ${res.status}: ${text.slice(0, 200)}`);
+      }
+
+      const data = await res.json();
+
+      if (data.success && data.videoUrl) {
+        setVideoUrl(data.videoUrl);
+        setGenerated(true);
+        setLoadingStep(LOADING_STEPS.length); // all done
+      } else {
+        throw new Error(data.error || "n8n returned an unexpected response");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setGenerating(false);
-      setGenerated(true);
-    }, 2500);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!videoUrl) return;
+    const a = document.createElement("a");
+    a.href = videoUrl;
+    a.download = `reel_${scene.replace(/\s/g, "_")}_${Date.now()}.mp4`;
+    a.click();
   };
 
   return (
@@ -88,6 +212,7 @@ export default function Create() {
       <style>{`
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin   { to { transform: rotate(360deg); } }
+        @keyframes shimmer { 0%,100% { opacity:0.6; } 50% { opacity:1; } }
       `}</style>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
@@ -95,7 +220,6 @@ export default function Create() {
         {/* ── Left Panel ── */}
         <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
 
-          {/* Title */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
             <span style={{ color: "#7c3aed", fontSize: 20 }}>✦</span>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a1a2e" }}>Create New Reel</h2>
@@ -156,7 +280,7 @@ export default function Create() {
 
           {/* Scene / Setting */}
           <label style={{ display: "block", fontWeight: 600, fontSize: 15, color: "#1a1a2e", marginBottom: 14 }}>
-            Scene/Setting
+            Scene / Setting
           </label>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 28 }}>
             {SCENES.map((s) => (
@@ -183,7 +307,7 @@ export default function Create() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
             <div>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-                Video Duration (seconds)
+                Video Duration
               </label>
               <SelectInput
                 value={duration}
@@ -219,9 +343,9 @@ export default function Create() {
 
           {/* Toggles */}
           {[
-            ["Auto-generate Caption",  captions,  setCaptions],
-            ["Add Background Music",   music,     setMusic],
-            ["Generate Hashtags",      hashtags,  setHashtags],
+            ["Auto-generate Caption", captions,  setCaptions],
+            ["Add Background Music",  music,     setMusic],
+            ["Generate Hashtags",     hashtags,  setHashtags],
           ].map(([label, val, setter]) => (
             <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <span style={{ fontSize: 14, color: "#1a1a2e", fontWeight: 500 }}>{label}</span>
@@ -235,19 +359,30 @@ export default function Create() {
             disabled={!prompt.trim() || generating}
             style={{
               width: "100%", padding: "15px", marginTop: 8, border: "none", borderRadius: 12,
-              background: prompt.trim()
+              background: prompt.trim() && !generating
                 ? "linear-gradient(135deg,#7c3aed,#3b82f6)"
                 : "#e5e7eb",
-              color: prompt.trim() ? "#fff" : "#9ca3af",
+              color: prompt.trim() && !generating ? "#fff" : "#9ca3af",
               fontWeight: 700, fontSize: 16,
-              cursor: prompt.trim() ? "pointer" : "not-allowed",
+              cursor: prompt.trim() && !generating ? "pointer" : "not-allowed",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: prompt.trim() ? "0 4px 16px rgba(124,58,237,0.35)" : "none",
+              boxShadow: prompt.trim() && !generating ? "0 4px 16px rgba(124,58,237,0.35)" : "none",
               transition: "all 0.2s",
             }}
           >
             {generating ? "⏳ Generating..." : "✦ Generate Reel"}
           </button>
+
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              marginTop: 14, padding: "12px 16px", background: "#fef2f2",
+              border: "1px solid #fecaca", borderRadius: 10,
+              fontSize: 13, color: "#dc2626", lineHeight: 1.5,
+            }}>
+              ❌ <strong>Error:</strong> {error}
+            </div>
+          )}
         </div>
 
         {/* ── Right Panel ── */}
@@ -259,42 +394,57 @@ export default function Create() {
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Your generated reel will appear here</p>
 
             <div style={{
-              border: "2px dashed #e5e7eb", borderRadius: 12,
-              aspectRatio: "9/16", display: "flex", flexDirection: "column",
+              border: `2px dashed ${generating ? "#7c3aed" : "#e5e7eb"}`,
+              borderRadius: 12, aspectRatio: "9/16",
+              display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", gap: 12,
-              background: "#f9fafb", overflow: "hidden",
+              background: generating ? "#faf5ff" : "#f9fafb",
+              overflow: "hidden", transition: "all 0.3s", position: "relative",
             }}>
-              {generating ? (
-                <>
+
+              {/* State: Generating */}
+              {generating && (
+                <div style={{
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", gap: 16, width: "100%", padding: "24px 0",
+                }}>
                   <div style={{
-                    width: 40, height: 40,
-                    border: "4px solid #e5e7eb",
-                    borderTop: "4px solid #7c3aed",
+                    width: 36, height: 36,
+                    border: "3px solid #e5e7eb",
+                    borderTop: "3px solid #7c3aed",
                     borderRadius: "50%",
                     animation: "spin 0.8s linear infinite",
+                    flexShrink: 0,
                   }} />
-                  <p style={{ color: "#6b7280", fontSize: 13 }}>Generating your reel...</p>
-                </>
-              ) : generated ? (
-                <div style={{ width: "100%", height: "100%", position: "relative" }}>
-                  <img
-                    src={ART_STYLES.find((a) => a.name === artStyle)?.thumb}
-                    alt="preview"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                  <div style={{
-                    position: "absolute", inset: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "rgba(0,0,0,0.2)",
+                  <LoadingSteps currentStep={loadingStep} />
+                  <p style={{
+                    color: "#7c3aed", fontSize: 12, fontWeight: 600,
+                    animation: "shimmer 1.5s infinite", textAlign: "center",
+                    padding: "0 16px",
                   }}>
-                    <div style={{
-                      width: 50, height: 50, borderRadius: "50%",
-                      background: "rgba(255,255,255,0.9)",
-                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
-                    }}>▶</div>
-                  </div>
+                    This may take 1–2 minutes...
+                  </p>
                 </div>
-              ) : (
+              )}
+
+              {/* State: Done → show video */}
+              {!generating && generated && videoUrl && (
+                <video
+                  src={videoUrl}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  style={{
+                    width: "100%", height: "100%",
+                    objectFit: "cover", borderRadius: 10,
+                    display: "block",
+                  }}
+                />
+              )}
+
+              {/* State: Idle */}
+              {!generating && !generated && (
                 <>
                   <div style={{ fontSize: 36, color: "#d1d5db" }}>🖼</div>
                   <p style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "0 16px" }}>
@@ -303,6 +453,35 @@ export default function Create() {
                 </>
               )}
             </div>
+
+            {/* Download + Regenerate buttons — shown after success */}
+            {generated && videoUrl && !generating && (
+              <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+                <button
+                  onClick={handleDownload}
+                  style={{
+                    flex: 1, padding: "11px", borderRadius: 10, border: "none",
+                    background: "linear-gradient(135deg,#7c3aed,#3b82f6)",
+                    color: "#fff", fontWeight: 700, fontSize: 14,
+                    cursor: "pointer", display: "flex", alignItems: "center",
+                    justifyContent: "center", gap: 6,
+                  }}
+                >
+                  ⬇ Download
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  style={{
+                    flex: 1, padding: "11px", borderRadius: 10,
+                    border: "1.5px solid #e5e7eb", background: "#fff",
+                    color: "#1a1a2e", fontWeight: 600, fontSize: 14,
+                    cursor: "pointer",
+                  }}
+                >
+                  ↺ Regenerate
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Quick Tips */}
