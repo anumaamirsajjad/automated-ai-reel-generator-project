@@ -1,0 +1,130 @@
+{
+  "name": "AI Reel Generator (Slideshow - No FFmpeg)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reel-generator",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\nconst prompt      = body.prompt      || '';\nconst theme       = body.theme       || 'nature';\nconst style       = body.style       || 'cinematic';\nconst mood        = body.mood        || 'calm';\nconst sceneCount  = parseInt(body.sceneCount)  || 5;\nconst sceneLength = parseInt(body.sceneLength) || 3;\nconst aspectRatio = body.aspectRatio || 'portrait';\n\nconst systemPrompt = `You are an expert creative director for short-form video reels.\nGenerate exactly ${sceneCount} highly detailed image prompts for a ${style} ${theme} reel with a ${mood} mood.\nUser description: \"${prompt}\"\n\nRules:\n- Each prompt describes ONE distinct scene\n- Include: lighting, color palette, composition, camera angle\n- Style: ${style}, Mood: ${mood}, Theme: ${theme}\n- Return ONLY a valid JSON array of strings, no markdown, no explanation\n- Example: [\"prompt1\", \"prompt2\"]`;\n\nreturn [{ json: { systemPrompt, theme, style, mood, sceneCount, sceneLength, aspectRatio, prompt } }];"
+      },
+      "id": "node-format",
+      "name": "Format Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer " },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3-8b-8192\",\n  \"temperature\": 0.8,\n  \"max_tokens\": 2000,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    { \"role\": \"user\",   \"content\": \"Generate the scene prompts now. Return ONLY the JSON array.\" }\n  ]\n}"
+      },
+      "id": "node-groq-generate",
+      "name": "Groq - Generate Prompts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst content  = response.choices[0].message.content.trim();\n\nlet prompts;\ntry {\n  const cleaned = content.replace(/```json|```/g, '').trim();\n  prompts = JSON.parse(cleaned);\n} catch(e) {\n  const match = content.match(/\\[.*\\]/s);\n  if (match) prompts = JSON.parse(match[0]);\n  else throw new Error('Could not parse prompts: ' + content.slice(0, 200));\n}\n\nconst prev = $('Format Request').first().json;\n\nreturn prompts.map((prompt, index) => ({\n  json: { prompt, sceneIndex: index, sceneCount: prev.sceneCount, sceneLength: prev.sceneLength, aspectRatio: prev.aspectRatio, style: prev.style, mood: prev.mood }\n}));"
+      },
+      "id": "node-parse",
+      "name": "Parse Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer " },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3-8b-8192\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 250,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": \"You are an expert at writing prompts for AI image generation (FLUX/Stable Diffusion). Enhance the given prompt with vivid details: lighting, color grading, lens type, artistic style modifiers. Keep under 150 words. Return ONLY the refined prompt, no explanation.\" },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.prompt) }} }\n  ]\n}"
+      },
+      "id": "node-groq-refine",
+      "name": "Groq - Refine Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response     = $input.first().json;\nconst refinedPrompt = response.choices[0].message.content.trim();\nconst prev          = $('Parse Prompts').first().json;\n\n// Dimensions based on aspect ratio\nconst dims = {\n  portrait:  { w: 576,  h: 1024 },\n  landscape: { w: 1024, h: 576  },\n  square:    { w: 768,  h: 768  },\n};\nconst { w, h } = dims[prev.aspectRatio] || dims.portrait;\n\n// Build Pollinations URL (free, no API key needed)\nconst encodedPrompt = encodeURIComponent(refinedPrompt);\nconst imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${w}&height=${h}&nologo=true&model=flux&seed=${prev.sceneIndex}`;\n\nreturn [{ json: { imageUrl, refinedPrompt, sceneIndex: prev.sceneIndex, sceneLength: prev.sceneLength } }];"
+      },
+      "id": "node-build-url",
+      "name": "Build Image URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all image URLs from all loop iterations\nconst items = $input.all();\n\nconst images     = items.map(item => item.json.imageUrl);\nconst sceneLength = items[0]?.json?.sceneLength || 3;\n\nreturn [{\n  json: {\n    success: true,\n    images,\n    sceneLength,\n    totalScenes: images.length,\n    message: 'Slideshow ready!'\n  }\n}];"
+      },
+      "id": "node-collect",
+      "name": "Collect Image URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Content-Type",                "value": "application/json" }
+            ]
+          }
+        }
+      },
+      "id": "node-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "Webhook":              { "main": [[{ "node": "Format Request",       "type": "main", "index": 0 }]] },
+    "Format Request":       { "main": [[{ "node": "Groq - Generate Prompts", "type": "main", "index": 0 }]] },
+    "Groq - Generate Prompts": { "main": [[{ "node": "Parse Prompts",     "type": "main", "index": 0 }]] },
+    "Parse Prompts":        { "main": [[{ "node": "Groq - Refine Prompt", "type": "main", "index": 0 }]] },
+    "Groq - Refine Prompt": { "main": [[{ "node": "Build Image URL",      "type": "main", "index": 0 }]] },
+    "Build Image URL":      { "main": [[{ "node": "Collect Image URLs",   "type": "main", "index": 0 }]] },
+    "Collect Image URLs":   { "main": [[{ "node": "Respond to Webhook",   "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "instanceId": "reel-slideshow-v1" },
+  "tags": ["reel", "slideshow", "no-ffmpeg"]
+}
