@@ -1,128 +1,189 @@
 {
-  "name": "AI Reel Generator (Slideshow - No FFmpeg)",
+  "name": "AI Reel Generator Pipeline",
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "POST",
         "path": "reel-generator",
-        "responseMode": "responseNode",
-        "options": {}
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
       },
-      "id": "node-webhook",
+      "id": "Webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [240, 300]
+      "position": [200, 300]
     },
+
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\nconst prompt      = body.prompt      || '';\nconst theme       = body.theme       || 'nature';\nconst style       = body.style       || 'cinematic';\nconst mood        = body.mood        || 'calm';\nconst sceneCount  = parseInt(body.sceneCount)  || 5;\nconst sceneLength = parseInt(body.sceneLength) || 3;\nconst aspectRatio = body.aspectRatio || 'portrait';\n\nconst systemPrompt = `You are an expert creative director for short-form video reels.\nGenerate exactly ${sceneCount} highly detailed image prompts for a ${style} ${theme} reel with a ${mood} mood.\nUser description: \"${prompt}\"\n\nRules:\n- Each prompt describes ONE distinct scene\n- Include: lighting, color palette, composition, camera angle\n- Style: ${style}, Mood: ${mood}, Theme: ${theme}\n- Return ONLY a valid JSON array of strings, no markdown, no explanation\n- Example: [\"prompt1\", \"prompt2\"]`;\n\nreturn [{ json: { systemPrompt, theme, style, mood, sceneCount, sceneLength, aspectRatio, prompt } }];"
+        "functionCode": "return [{ json: { prompt: $json.prompt, sceneCount: $json.sceneCount || 5 } }];"
       },
-      "id": "node-format",
-      "name": "Format Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [460, 300]
+      "id": "PrepareInput",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.function",
+      "position": [400, 300]
     },
+
     {
       "parameters": {
-        "method": "POST",
+        "requestMethod": "POST",
         "url": "https://api.groq.com/openai/v1/chat/completions",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type",  "value": "application/json" }
-          ]
-        },
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"llama3-8b-8192\",\n  \"temperature\": 0.8,\n  \"max_tokens\": 2000,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    { \"role\": \"user\",   \"content\": \"Generate the scene prompts now. Return ONLY the JSON array.\" }\n  ]\n}"
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"model\": \"mixtral-8x7b-32768\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate {{$json.sceneCount}} cinematic image prompts for: {{$json.prompt}}. Return as JSON array.\"\n    }\n  ]\n}"
       },
-      "id": "node-groq-generate",
-      "name": "Groq - Generate Prompts",
+      "id": "Groq",
+      "name": "Generate Scenes (Groq)",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [680, 300]
+      "position": [600, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "groq-api",
+          "name": "Groq API"
+        }
+      }
     },
+
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nconst content  = response.choices[0].message.content.trim();\n\nlet prompts;\ntry {\n  const cleaned = content.replace(/```json|```/g, '').trim();\n  prompts = JSON.parse(cleaned);\n} catch(e) {\n  const match = content.match(/\\[.*\\]/s);\n  if (match) prompts = JSON.parse(match[0]);\n  else throw new Error('Could not parse prompts: ' + content.slice(0, 200));\n}\n\nconst prev = $('Format Request').first().json;\n\nreturn prompts.map((prompt, index) => ({\n  json: { prompt, sceneIndex: index, sceneCount: prev.sceneCount, sceneLength: prev.sceneLength, aspectRatio: prev.aspectRatio, style: prev.style, mood: prev.mood }\n}));"
+        "functionCode": "const text = items[0].json.choices[0].message.content;\nlet scenes;\ntry { scenes = JSON.parse(text); } catch { scenes = text.split(\"\\n\"); }\nreturn scenes.map(s => ({ json: { scene: s } }));"
       },
-      "id": "node-parse",
-      "name": "Parse Prompts",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [900, 300]
+      "id": "ParseScenes",
+      "name": "Parse Scenes",
+      "type": "n8n-nodes-base.function",
+      "position": [800, 300]
     },
+
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.groq.com/openai/v1/chat/completions",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type",  "value": "application/json" }
-          ]
-        },
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"llama3-8b-8192\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 250,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": \"You are an expert at writing prompts for AI image generation (FLUX/Stable Diffusion). Enhance the given prompt with vivid details: lighting, color grading, lens type, artistic style modifiers. Keep under 150 words. Return ONLY the refined prompt, no explanation.\" },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.prompt) }} }\n  ]\n}"
+        "batchSize": 1
       },
-      "id": "node-groq-refine",
-      "name": "Groq - Refine Prompt",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1120, 300]
+      "id": "Split",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [1000, 300]
     },
+
     {
       "parameters": {
-        "jsCode": "const response     = $input.first().json;\nconst refinedPrompt = response.choices[0].message.content.trim();\nconst prev          = $('Parse Prompts').first().json;\n\n// Dimensions based on aspect ratio\nconst dims = {\n  portrait:  { w: 576,  h: 1024 },\n  landscape: { w: 1024, h: 576  },\n  square:    { w: 768,  h: 768  },\n};\nconst { w, h } = dims[prev.aspectRatio] || dims.portrait;\n\n// Build Pollinations URL (free, no API key needed)\nconst encodedPrompt = encodeURIComponent(refinedPrompt);\nconst imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${w}&height=${h}&nologo=true&model=flux&seed=${prev.sceneIndex}`;\n\nreturn [{ json: { imageUrl, refinedPrompt, sceneIndex: prev.sceneIndex, sceneLength: prev.sceneLength } }];"
-      },
-      "id": "node-build-url",
-      "name": "Build Image URL",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1340, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Collect all image URLs from all loop iterations\nconst items = $input.all();\n\nconst images     = items.map(item => item.json.imageUrl);\nconst sceneLength = items[0]?.json?.sceneLength || 3;\n\nreturn [{\n  json: {\n    success: true,\n    images,\n    sceneLength,\n    totalScenes: images.length,\n    message: 'Slideshow ready!'\n  }\n}];"
-      },
-      "id": "node-collect",
-      "name": "Collect Image URLs",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1560, 300]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
+        "requestMethod": "POST",
+        "url": "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\"inputs\": $json.scene }",
         "options": {
-          "responseHeaders": {
-            "entries": [
-              { "name": "Access-Control-Allow-Origin", "value": "*" },
-              { "name": "Content-Type",                "value": "application/json" }
-            ]
-          }
+          "responseFormat": "file"
         }
       },
-      "id": "node-respond",
-      "name": "Respond to Webhook",
+      "id": "HF",
+      "name": "Generate Image (HF)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1200, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hf-api",
+          "name": "HF API"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "filePath": "=/tmp/scene_{{$itemIndex}}.png"
+      },
+      "id": "SaveImage",
+      "name": "Save Image",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "position": [1400, 300]
+    },
+
+    {
+      "parameters": {},
+      "id": "Merge",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "position": [1600, 300]
+    },
+
+    {
+      "parameters": {
+        "command": "ffmpeg -y -framerate 1/3 -i /tmp/scene_%d.png -c:v libx264 -pix_fmt yuv420p /tmp/output.mp4"
+      },
+      "id": "FFmpeg",
+      "name": "Create Video",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1800, 300]
+    },
+
+    {
+      "parameters": {
+        "functionCode": "const fileName = `video_${Date.now()}.mp4`;\nreturn [{ json: { fileName, publicPath: `/public/videos/${fileName}`, url: `/videos/${fileName}` } }];"
+      },
+      "id": "FileName",
+      "name": "Generate File Name",
+      "type": "n8n-nodes-base.function",
+      "position": [2000, 300]
+    },
+
+    {
+      "parameters": {
+        "command": "mv /tmp/output.mp4 {{$json.publicPath}}"
+      },
+      "id": "MoveVideo",
+      "name": "Move Video",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [2200, 300]
+    },
+
+    {
+      "parameters": {
+        "command": "rm /tmp/scene_*.png"
+      },
+      "id": "Cleanup",
+      "name": "Cleanup Temp",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [2400, 300]
+    },
+
+    {
+      "parameters": {
+        "query": "INSERT INTO Videos (video_url, created_at) VALUES ('{{$json.url}}', GETDATE())"
+      },
+      "id": "DB",
+      "name": "Save to MSSQL",
+      "type": "n8n-nodes-base.microsoftSql",
+      "position": [2600, 300],
+      "credentials": {
+        "microsoftSql": {
+          "id": "mssql",
+          "name": "MSSQL"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "responseBody": "={\"success\": true, \"videoUrl\": $json.url }"
+      },
+      "id": "Response",
+      "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1780, 300]
+      "position": [2800, 300]
     }
   ],
+
   "connections": {
-    "Webhook":              { "main": [[{ "node": "Format Request",       "type": "main", "index": 0 }]] },
-    "Format Request":       { "main": [[{ "node": "Groq - Generate Prompts", "type": "main", "index": 0 }]] },
-    "Groq - Generate Prompts": { "main": [[{ "node": "Parse Prompts",     "type": "main", "index": 0 }]] },
-    "Parse Prompts":        { "main": [[{ "node": "Groq - Refine Prompt", "type": "main", "index": 0 }]] },
-    "Groq - Refine Prompt": { "main": [[{ "node": "Build Image URL",      "type": "main", "index": 0 }]] },
-    "Build Image URL":      { "main": [[{ "node": "Collect Image URLs",   "type": "main", "index": 0 }]] },
-    "Collect Image URLs":   { "main": [[{ "node": "Respond to Webhook",   "type": "main", "index": 0 }]] }
-  },
-  "active": true,
-  "settings": { "executionOrder": "v1" },
-  "meta": { "instanceId": "reel-slideshow-v1" },
-  "tags": ["reel", "slideshow", "no-ffmpeg"]
+    "Webhook": { "main": [[{ "node": "Prepare Input", "type": "main" }]] },
+    "Prepare Input": { "main": [[{ "node": "Groq", "type": "main" }]] },
+    "Groq": { "main": [[{ "node": "Parse Scenes", "type": "main" }]] },
+    "Parse Scenes": { "main": [[{ "node": "Split", "type": "main" }]] },
+    "Split": { "main": [[{ "node": "Generate Image (HF)", "type": "main" }]] },
+    "Generate Image (HF)": { "main": [[{ "node": "Save Image", "type": "main" }]] },
+    "Save Image": { "main": [[{ "node": "Merge", "type": "main" }]] },
+    "Merge": { "main": [[{ "node": "Create Video", "type": "main" }]] },
+    "Create Video": { "main": [[{ "node": "Generate File Name", "type": "main" }]] },
+    "Generate File Name": { "main": [[{ "node": "Move Video", "type": "main" }]] },
+    "Move Video": { "main": [[{ "node": "Cleanup Temp", "type": "main" }]] },
+    "Cleanup Temp": { "main": [[{ "node": "Save to MSSQL", "type": "main" }]] },
+    "Save to MSSQL": { "main": [[{ "node": "Respond", "type": "main" }]] }
+  }
 }
