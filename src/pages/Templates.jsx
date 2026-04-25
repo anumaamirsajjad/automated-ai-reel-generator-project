@@ -157,3 +157,4 @@ export default function Templates({ setPage }) {
     </div>
   );
 }
+// template page
