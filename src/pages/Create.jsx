@@ -1,8 +1,11 @@
 import { useState } from "react";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
-const GENERATE_URL = `${API_BASE_URL}/api/reel-generator`;
+const RAW_API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || "").trim();
+const API_BASE_URL = RAW_API_BASE_URL ? RAW_API_BASE_URL.replace(/\/+$/, "") : "";
+const GENERATE_PATH = "/api/reel-generator";
+const GENERATE_URL = API_BASE_URL ? `${API_BASE_URL}${GENERATE_PATH}` : GENERATE_PATH;
+const REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_GENERATE_TIMEOUT_MS || 420000);
 // You can still swap this backend endpoint to your n8n workflow later.
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -24,10 +27,17 @@ const SCENES = [
   "Desert Dunes",
 ];
 
-// Maps "15 seconds" → number of scenes (approx 1 scene per 3 seconds)
+function durationToSeconds(duration) {
+  return Number.parseInt(duration, 10) || 15;
+}
+
+// Maps reel duration to number of images for a cohesive reel.
 function durationToSceneCount(duration) {
-  const secs = parseInt(duration);
-  return secs <= 30 ? 7 : 8;
+  const seconds = durationToSeconds(duration);
+
+  if (seconds <= 5) return 2;
+  if (seconds <= 10) return 4;
+  return 6;
 }
 
 function Toggle({ on, onChange }) {
@@ -115,7 +125,7 @@ export default function Create() {
   const [prompt, setPrompt]         = useState("");
   const [artStyle, setArtStyle]     = useState("Realistic");
   const [scene, setScene]           = useState("Sunset Beach");
-  const [duration, setDuration]     = useState("15 seconds");
+  const [duration, setDuration]     = useState("10 seconds");
   const [ratio, setRatio]           = useState("9:16 (Vertical)");
   const [speed, setSpeed]           = useState(50);
   const [captions, setCaptions]     = useState(true);
@@ -171,7 +181,8 @@ export default function Create() {
       style:       artStyle,
       mood:        "cinematic",
       sceneCount:  durationToSceneCount(duration),
-      sceneLength: 3,
+      reelDurationSeconds: durationToSeconds(duration),
+      sceneLength: durationToSeconds(duration) / durationToSceneCount(duration),
       aspectRatio: aspectRatioMap[ratio] || "portrait",
       captions,
       music,
@@ -180,11 +191,20 @@ export default function Create() {
     };
 
     try {
-      const res = await fetch(GENERATE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      let res;
+
+      try {
+        res = await fetch(GENERATE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!res.ok) {
         const text = await res.text();
@@ -215,7 +235,16 @@ export default function Create() {
       setVideoUrl(null);
       setGenerated(false);
       setLoadingStep(0);
-      setError(`Reel generation failed. Details: ${err?.message || "Unknown error"}`);
+
+      const fallbackHint = API_BASE_URL
+        ? "Check that REACT_APP_API_BASE_URL is reachable and backend is running."
+        : "Check that backend is running on port 5000 and react-scripts proxy is active.";
+
+      const reason = err?.name === "AbortError"
+        ? `Request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s`
+        : err?.message || "Unknown network error";
+
+      setError(`Reel generation failed. Details: ${reason}. ${fallbackHint}`);
     } finally {
       setGenerating(false);
     }
@@ -336,7 +365,7 @@ export default function Create() {
               </label>
               <SelectInput
                 value={duration}
-                options={["15 seconds", "30 seconds", "45 seconds", "60 seconds"]}
+                options={["5 seconds", "10 seconds", "15 seconds"]}
                 onChange={setDuration}
               />
             </div>

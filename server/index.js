@@ -1325,7 +1325,6 @@
 
 
 ////////////////////////////////////////////////////
-```js
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -1343,6 +1342,8 @@ const PORT = process.env.PORT || 5000;
 const GENERATED_DIR = path.join(__dirname, "generated");
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-2.0-flash-preview-image-generation";
+const HF_API_TOKEN = process.env.HF_API_TOKEN || process.env.HF_TOKEN || "";
+const HF_IMAGE_MODEL = process.env.HF_IMAGE_MODEL || "black-forest-labs/FLUX.1-schnell";
 
 app.use(cors());
 app.use(express.json());
@@ -1377,12 +1378,28 @@ function buildScenePrompts({ prompt, style, theme, sceneCount }) {
     "final reveal shot with a realistic handheld camera feel",
   ];
 
+  const narrativeBeats = [
+    "opening moment that establishes the setting",
+    "subject moves slightly forward with clearer focus",
+    "mid-sequence emotional beat with environmental depth",
+    "supporting detail shot that still keeps subject identity",
+    "climactic moment with cinematic tension",
+    "calm resolution shot that feels complete",
+  ];
+
   return Array.from({ length: sceneCount }, (_, i) => {
+    const continuityInstruction =
+      i === 0
+        ? "introduce one clear main subject and keep identity consistent"
+        : "continuation of previous scene, same subject, same outfit, same location";
+
     return [
       `photorealistic scene based on: ${prompt}`,
       style ? `${style} style` : null,
       theme || null,
       cameraDirections[i % cameraDirections.length],
+      narrativeBeats[i % narrativeBeats.length],
+      continuityInstruction,
       `scene ${i + 1} of ${sceneCount}`,
       "same location, same subject, same environment",
       "cinematic lighting",
@@ -1397,6 +1414,20 @@ function buildScenePrompts({ prompt, style, theme, sceneCount }) {
 
 function clampNumber(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function getSceneCountForDuration(durationSeconds) {
+  const normalizedDuration = clampNumber(Number(durationSeconds) || 15, 5, 15);
+
+  if (normalizedDuration <= 5) {
+    return 2;
+  }
+
+  if (normalizedDuration <= 10) {
+    return 4;
+  }
+
+  return 6;
 }
 
 function computeSceneLengthBySpeed(sceneLength, speed) {
@@ -1414,7 +1445,11 @@ function escapeDrawtext(text) {
     .replace(/\\/g, "\\\\") // backslash
     .replace(/:/g, "\\:") // option separator in drawtext
     .replace(/'/g, "\\'") // single quote inside quoted string
-    .replace(/%/g, "\\%"); // percent
+    .replace(/,/g, "\\,") // filter separator
+    .replace(/\[/g, "\\[") // filter syntax
+    .replace(/\]/g, "\\]") // filter syntax
+    .replace(/%/g, "\\%") // variable marker
+    .replace(/\n/g, " "); // drawtext does not handle raw newlines safely
 }
 
 /**
@@ -1424,10 +1459,8 @@ function escapeDrawtext(text) {
 function buildCaptionFilter({ caption }) {
   const safeCaption = escapeDrawtext(caption);
 
-  // Using a filter chain with drawtext only.
-  // Using double quotes for text option value to avoid many single-quote issues.
-  // NOTE: In ffmpeg filter syntax, we set text="...".
-  return `drawtext=text="${safeCaption}":fontcolor=white:fontsize=34:x=(w-text_w)/2:y=h-text_h-50:box=1:boxcolor=black@0.45:boxborderw=14`;
+  // Keep the filter expression raw (without -vf). fluent-ffmpeg will add the option.
+  return `drawtext=text='${safeCaption}':fontcolor=white:fontsize=34:x=(w-text_w)/2:y=h-text_h-50:box=1:boxcolor=black@0.45:boxborderw=14`;
 }
 
 function generateHashtags({ prompt, theme, style, maxCount = 8 }) {
@@ -1574,6 +1607,57 @@ async function fetchWithTimeout(url, timeoutMs = 15000, options = {}) {
   }
 }
 
+async function generateHuggingFaceImageToFile({ scenePrompt, width, height, outputPath, maxAttempts = 2 }) {
+  if (!HF_API_TOKEN) {
+    throw new Error("HF_API_TOKEN is not configured");
+  }
+
+  const endpoint = `https://router.huggingface.co/hf-inference/models/${encodeURIComponent(HF_IMAGE_MODEL)}`;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(endpoint, 25000, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${HF_API_TOKEN}`,
+          "Content-Type": "application/json",
+          Accept: "image/png",
+        },
+        body: JSON.stringify({
+          inputs: scenePrompt,
+          parameters: {
+            width,
+            height,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Hugging Face API status ${response.status}: ${text.slice(0, 280)}`);
+      }
+
+      const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+      if (!contentType.startsWith("image/")) {
+        const text = await response.text();
+        throw new Error(`Hugging Face returned non-image response: ${text.slice(0, 280)}`);
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      await fsp.writeFile(outputPath, buffer);
+      return;
+    } catch (err) {
+      lastError = new Error(`Hugging Face attempt ${attempt}/${maxAttempts} failed: ${err.message}`);
+      if (attempt < maxAttempts) {
+        await wait(1500 * attempt);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 async function generateGeminiImageToFile({ scenePrompt, width, height, outputPath, maxAttempts = 2 }) {
   if (!GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured");
@@ -1633,12 +1717,12 @@ async function generateGeminiImageToFile({ scenePrompt, width, height, outputPat
   throw lastError;
 }
 
-async function downloadImageWithRetry(url, outputPath, maxAttempts = 4, waitMs = 1200) {
+async function downloadImageWithRetry(url, outputPath, maxAttempts = 2, waitMs = 500) {
   let lastError;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await fetchWithTimeout(url, 15000);
+      const response = await fetchWithTimeout(url, 10000);
       if (!response.ok) {
         const status = response.status;
         throw new Error(`Image download failed with status ${status}`);
@@ -1659,8 +1743,20 @@ async function downloadImageWithRetry(url, outputPath, maxAttempts = 4, waitMs =
 }
 
 // FIX 2: Replaced slow zoompan with a fast scale+fps filter
-function renderCinematicVideoFromImage({ inputPath, outputPath, width, height, durationSeconds }) {
-  const scalePadFilter = `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=30,format=yuv420p`;
+function renderCinematicVideoFromImage({ inputPath, outputPath, width, height, durationSeconds, motionPreset = 0 }) {
+  const totalFrames = Math.max(1, Math.floor(durationSeconds * 30));
+  const normalizedPreset = ((Number(motionPreset) % 4) + 4) % 4;
+  const fadeOutStart = Math.max(0.18, Number((durationSeconds - 0.24).toFixed(2)));
+  const xFreq = 18 + normalizedPreset * 2;
+  const yFreq = 20 + normalizedPreset * 2;
+
+  const motionFilter = [
+    `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`,
+    `zoompan=z='min(1.08,1+on/${totalFrames}*0.08)':x='iw/2-(iw/zoom/2)+sin(on/${xFreq})*4':y='ih/2-(ih/zoom/2)+cos(on/${yFreq})*4':d=1:s=${width}x${height}:fps=30`,
+    "fade=t=in:st=0:d=0.14",
+    `fade=t=out:st=${fadeOutStart}:d=0.18`,
+    "format=yuv420p",
+  ].join(",");
 
   return new Promise((resolve, reject) => {
     ffmpeg()
@@ -1673,7 +1769,7 @@ function renderCinematicVideoFromImage({ inputPath, outputPath, width, height, d
         "-pix_fmt yuv420p",
         `-t ${durationSeconds}`,
       ])
-      .videoFilter(scalePadFilter)
+      .videoFilter(motionFilter)
       .on("end", resolve)
       .on("error", (err) => reject(new Error(`Video render failed: ${err.message}`)))
       .save(outputPath);
@@ -1785,9 +1881,9 @@ async function applyVideoEnhancements({
       "-pix_fmt yuv420p",
     ];
 
-    // Apply captions using videoFilter (NOT via outputOptions -vf)
+    // Apply captions as a pure filter expression; do not pass -vf/-filter:v in outputOptions.
     if (captionFilter) {
-      command.videoFilter(captionFilter);
+      command.complexFilter([captionFilter]);
     }
 
     if (addMusic) {
@@ -1822,6 +1918,7 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "reel-generator-backend",
     ffmpeg: Boolean(ffmpegPath),
+    huggingFaceConfigured: Boolean(HF_API_TOKEN),
     geminiConfigured: Boolean(GEMINI_API_KEY),
   });
 });
@@ -1832,12 +1929,9 @@ app.post("/api/reel-generator", async (req, res) => {
   const music = Boolean(req.body?.music);
   const hashtagsEnabled = Boolean(req.body?.hashtags);
   const speed = clampNumber(Number(req.body?.speed) || 50, 0, 100);
-
-  const baseSceneLength = clampNumber(Number(req.body?.sceneLength) || 3, 2, 6);
-  const effectiveSceneLength = computeSceneLengthBySpeed(baseSceneLength, speed);
-
-  const sceneCount = clampNumber(Number(req.body?.sceneCount) || 4, 3, 8);
-  const requestedSeconds = clampNumber(effectiveSceneLength * sceneCount, 10, 30);
+  const requestedSeconds = clampNumber(Number(req.body?.reelDurationSeconds) || 10, 5, 15);
+  const sceneCount = getSceneCountForDuration(requestedSeconds);
+  const effectiveSceneLength = Number((requestedSeconds / sceneCount).toFixed(2));
 
   if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
     return res.status(400).json({ success: false, error: "Prompt is required" });
@@ -1878,18 +1972,28 @@ app.post("/api/reel-generator", async (req, res) => {
       let source = "pollinations";
 
       try {
-        if (GEMINI_API_KEY) {
+        if (HF_API_TOKEN) {
+          await generateHuggingFaceImageToFile({
+            scenePrompt: promptText,
+            width,
+            height,
+            outputPath: framePath,
+            maxAttempts: 1,
+          });
+          source = "huggingface";
+          imageUrl = null;
+        } else if (GEMINI_API_KEY) {
           await generateGeminiImageToFile({
             scenePrompt: buildGeminiImagePrompt({ scenePrompt: promptText, width, height }),
             width,
             height,
             outputPath: framePath,
-            maxAttempts: 2,
+            maxAttempts: 1,
           });
           source = "gemini";
           imageUrl = null;
         } else {
-          await downloadImageWithRetry(imageUrl, framePath, 4, 1000);
+          await downloadImageWithRetry(imageUrl, framePath, 2, 500);
         }
       } catch (primaryErr) {
         source = "pollinations";
@@ -1904,7 +2008,7 @@ app.post("/api/reel-generator", async (req, res) => {
         let fallbackSource = "none";
 
         try {
-          await downloadImageWithRetry(imageUrl, framePath, 2, 600);
+          await downloadImageWithRetry(imageUrl, framePath, 1, 400);
           imageUrls.push(imageUrl);
           sceneSources.push({ scene: index + 1, source, imageUrl });
         } catch (pollinationsRetryErr) {
@@ -1919,6 +2023,7 @@ app.post("/api/reel-generator", async (req, res) => {
             width,
             height,
             durationSeconds: effectiveSceneLength,
+            motionPreset: index,
           });
           clipPaths.push(clipPathFast);
           continue;
@@ -1930,7 +2035,7 @@ app.post("/api/reel-generator", async (req, res) => {
               query: fallbackQuery,
               width,
               height,
-              limit: Math.max(sceneCount + 2, 8),
+              limit: 3,
             });
           }
         } catch (wikimediaErr) {
@@ -1951,7 +2056,7 @@ app.post("/api/reel-generator", async (req, res) => {
         }
 
         try {
-          await downloadImageWithRetry(fallbackImageUrl, framePath, 2, 700);
+          await downloadImageWithRetry(fallbackImageUrl, framePath, 1, 400);
           console.warn(
             `Scene ${index + 1} switched to related-image fallback (${fallbackSource}): ${primaryErr.message}`
           );
@@ -1999,6 +2104,7 @@ app.post("/api/reel-generator", async (req, res) => {
         width,
         height,
         durationSeconds: effectiveSceneLength,
+        motionPreset: index,
       });
       clipPaths.push(clipPath);
     }
@@ -2022,11 +2128,19 @@ app.post("/api/reel-generator", async (req, res) => {
     const generatedHashtags = hashtagsEnabled
       ? generateHashtags({ prompt: prompt.trim(), theme, style, maxCount: 8 })
       : [];
+    const firstSceneSource = sceneSources[0]?.source;
+    const providerLabel = firstSceneSource
+      ? `${firstSceneSource}+ffmpeg-cinematic-motion`
+      : HF_API_TOKEN
+      ? "huggingface+ffmpeg-cinematic-motion"
+      : GEMINI_API_KEY
+      ? "gemini+ffmpeg-cinematic-motion"
+      : "pollinations+ffmpeg-cinematic-motion";
 
     return res.json({
       success: true,
       mode: "video",
-      provider: GEMINI_API_KEY ? "gemini+ffmpeg-cinematic-motion" : "pollinations+ffmpeg-cinematic-motion",
+      provider: providerLabel,
       videoUrl: `${baseUrl}/generated/${outputFile}`,
       imageUrls,
       sceneSources,

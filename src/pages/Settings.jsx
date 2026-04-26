@@ -122,7 +122,7 @@ export default function Settings() {
   const [optimalTime,   setOptimalTime]   = useState("Auto (AI-optimized)");
 
   const [artStyle,      setArtStyle]      = useState("Realistic");
-  const [duration,      setDuration]      = useState("15 seconds");
+  const [duration,      setDuration]      = useState("10 seconds");
   const [quality,       setQuality]       = useState("High (1080p)");
   const [autoCaptions,  setAutoCaptions]  = useState(true);
   const [autoHashtags,  setAutoHashtags]  = useState(true);
@@ -220,7 +220,7 @@ export default function Settings() {
           </label>
           <SelectInput
             value={duration}
-            options={["15 seconds", "30 seconds", "45 seconds", "60 seconds"]}
+            options={["5 seconds", "10 seconds", "15 seconds"]}
             onChange={setDuration}
           />
         </div>
