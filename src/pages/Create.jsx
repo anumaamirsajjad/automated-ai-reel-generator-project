@@ -1,8 +1,9 @@
 import { useState } from "react";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const WEBHOOK_URL = "http://localhost:5678/webhook/reel-generator";
-// Change the above to your actual n8n webhook URL when deploying
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
+const GENERATE_URL = `${API_BASE_URL}/api/reel-generator`;
+// You can still swap this backend endpoint to your n8n workflow later.
 // ──────────────────────────────────────────────────────────────────────────────
 
 const ART_STYLES = [
@@ -26,7 +27,7 @@ const SCENES = [
 // Maps "15 seconds" → number of scenes (approx 1 scene per 3 seconds)
 function durationToSceneCount(duration) {
   const secs = parseInt(duration);
-  return Math.max(3, Math.round(secs / 3));
+  return secs <= 30 ? 7 : 8;
 }
 
 function Toggle({ on, onChange }) {
@@ -73,11 +74,10 @@ function SelectInput({ value, options, onChange }) {
 
 // ─── Loading Steps Component ───────────────────────────────────────────────────
 const LOADING_STEPS = [
-  "Writing scene prompts with AI",
-  "Refining prompts for image quality",
-  "Generating images with FLUX",
-  "Stitching frames into video",
-  "Finalizing your reel",
+  "Creating a realistic scene image",
+  "Applying cinematic camera motion",
+  "Encoding your reel",
+  "Finalizing output",
 ];
 
 function LoadingSteps({ currentStep }) {
@@ -124,12 +124,15 @@ export default function Create() {
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState(false);
   const [videoUrl, setVideoUrl]     = useState(null);
+  const [imageUrl, setImageUrl]     = useState(null);
+  const [generatedHashtags, setGeneratedHashtags] = useState([]);
+  const [settingsApplied, setSettingsApplied] = useState(null);
   const [error, setError]           = useState(null);
   const [loadingStep, setLoadingStep] = useState(0);
 
   // Simulate step progress during generation
   const startStepTimer = () => {
-    const timings = [6000, 14000, 45000, 20000]; // ms per step
+    const timings = [4000, 7000, 6000]; // ms per step
     let step = 0;
     const advance = () => {
       step += 1;
@@ -147,6 +150,9 @@ export default function Create() {
     setGenerating(true);
     setGenerated(false);
     setVideoUrl(null);
+    setImageUrl(null);
+    setGeneratedHashtags([]);
+    setSettingsApplied(null);
     setError(null);
     setLoadingStep(0);
 
@@ -159,23 +165,25 @@ export default function Create() {
       "1:1 (Square)":      "square",
     };
 
+    const payload = {
+      prompt,
+      theme:       scene,
+      style:       artStyle,
+      mood:        "cinematic",
+      sceneCount:  durationToSceneCount(duration),
+      sceneLength: 3,
+      aspectRatio: aspectRatioMap[ratio] || "portrait",
+      captions,
+      music,
+      hashtags,
+      speed,
+    };
+
     try {
-      const res = await fetch(WEBHOOK_URL, {
+      const res = await fetch(GENERATE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          theme:       scene,
-          style:       artStyle,
-          mood:        "cinematic",
-          sceneCount:  durationToSceneCount(duration),
-          sceneLength: 3,
-          aspectRatio: aspectRatioMap[ratio] || "portrait",
-          captions,
-          music,
-          hashtags,
-          speed,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -187,23 +195,40 @@ export default function Create() {
 
       if (data.success && data.videoUrl) {
         setVideoUrl(data.videoUrl);
+        setImageUrl(null);
+        setGeneratedHashtags(Array.isArray(data.hashtags) ? data.hashtags : []);
+        setSettingsApplied(data.settingsApplied || null);
+        setGenerated(true);
+        setLoadingStep(LOADING_STEPS.length); // all done
+      } else if (data.success && data.imageUrl) {
+        setImageUrl(data.imageUrl);
+        setVideoUrl(null);
+        setGeneratedHashtags(Array.isArray(data.hashtags) ? data.hashtags : []);
+        setSettingsApplied(data.settingsApplied || null);
         setGenerated(true);
         setLoadingStep(LOADING_STEPS.length); // all done
       } else {
-        throw new Error(data.error || "n8n returned an unexpected response");
+        throw new Error(data.error || "Backend returned an unexpected response");
       }
     } catch (err) {
-      setError(err.message);
+      setImageUrl(null);
+      setVideoUrl(null);
+      setGenerated(false);
+      setLoadingStep(0);
+      setError(`Reel generation failed. Details: ${err?.message || "Unknown error"}`);
     } finally {
       setGenerating(false);
     }
   };
 
   const handleDownload = () => {
-    if (!videoUrl) return;
+    if (!videoUrl && !imageUrl) return;
+
     const a = document.createElement("a");
-    a.href = videoUrl;
-    a.download = `reel_${scene.replace(/\s/g, "_")}_${Date.now()}.mp4`;
+    a.href = videoUrl || imageUrl;
+    a.download = videoUrl
+      ? `reel_${scene.replace(/\s/g, "_")}_${Date.now()}.mp4`
+      : `reel_preview_${scene.replace(/\s/g, "_")}_${Date.now()}.jpg`;
     a.click();
   };
 
@@ -391,7 +416,7 @@ export default function Create() {
           {/* Preview */}
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", flex: 1 }}>
             <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#1a1a2e" }}>Preview</h3>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Your generated reel will appear here</p>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Your generated result will appear here</p>
 
             <div style={{
               border: `2px dashed ${generating ? "#7c3aed" : "#e5e7eb"}`,
@@ -422,7 +447,7 @@ export default function Create() {
                     animation: "shimmer 1.5s infinite", textAlign: "center",
                     padding: "0 16px",
                   }}>
-                    This may take 1–2 minutes...
+                      Usually finishes in under 2 minutes...
                   </p>
                 </div>
               )}
@@ -443,6 +468,19 @@ export default function Create() {
                 />
               )}
 
+              {/* State: Done -> show image fallback */}
+              {!generating && generated && !videoUrl && imageUrl && (
+                <img
+                  src={imageUrl}
+                  alt="Generated preview"
+                  style={{
+                    width: "100%", height: "100%",
+                    objectFit: "cover", borderRadius: 10,
+                    display: "block",
+                  }}
+                />
+              )}
+
               {/* State: Idle */}
               {!generating && !generated && (
                 <>
@@ -455,7 +493,7 @@ export default function Create() {
             </div>
 
             {/* Download + Regenerate buttons — shown after success */}
-            {generated && videoUrl && !generating && (
+            {generated && (videoUrl || imageUrl) && !generating && (
               <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
                 <button
                   onClick={handleDownload}
@@ -480,6 +518,38 @@ export default function Create() {
                 >
                   ↺ Regenerate
                 </button>
+              </div>
+            )}
+
+            {generated && settingsApplied && !generating && (
+              <div style={{ marginTop: 14, padding: "10px 12px", background: "#f9fafb", borderRadius: 10, border: "1px solid #e5e7eb" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 12, color: "#374151", fontWeight: 600 }}>Applied Settings</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>
+                  {settingsApplied.sceneCount} scenes • style: {settingsApplied.style || "default"} • setting: {settingsApplied.theme || "auto"}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>
+                  captions: {settingsApplied.captions ? "on" : "off"} • music: {settingsApplied.music ? "on" : "off"} • speed: {settingsApplied.speed}
+                </p>
+              </div>
+            )}
+
+            {generated && generatedHashtags.length > 0 && !generating && (
+              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {generatedHashtags.map((tag) => (
+                  <span
+                    key={tag}
+                    style={{
+                      fontSize: 12,
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      background: "#eef2ff",
+                      color: "#4338ca",
+                      border: "1px solid #c7d2fe",
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
               </div>
             )}
           </div>

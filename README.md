@@ -1,3 +1,66 @@
+# Automated Reel Generator (Frontend + Backend)
+
+This project now includes:
+
+- React frontend (Create React App)
+- Local Express backend at `http://localhost:5000`
+- Free image generation provider (Pollinations)
+- Local reel rendering pipeline (FFmpeg)
+
+## Quick Start
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run frontend + backend together:
+
+```bash
+npm run dev
+```
+
+The frontend runs on `http://localhost:3000` and calls backend endpoint:
+
+- `POST /api/reel-generator`
+
+Optional frontend env override:
+
+- `REACT_APP_API_BASE_URL=http://localhost:5000`
+
+## Gemini Integration (Recommended)
+
+To improve prompt relevance, the backend can generate scene images with Gemini first, then stitch into a reel.
+
+Create a `.env` file in the project root with:
+
+```bash
+GEMINI_API_KEY=your_google_ai_api_key
+GEMINI_IMAGE_MODEL=gemini-2.0-flash-preview-image-generation
+```
+
+If Gemini is unavailable for a request, backend fallback order is:
+
+1. Pollinations image generation
+2. Wikimedia prompt-keyword images
+3. Keyword photo fallback
+4. Prompt-based synthetic MP4 fallback
+
+## API Response Notes
+
+`/api/reel-generator` now follows a two-step flow:
+
+1. Generate multiple scene images from your prompt
+2. Stitch those images into an MP4 reel
+
+The endpoint response can return either:
+
+- `videoUrl` (default successful path)
+- `imageUrl` (fallback if video stitching fails)
+
+The UI supports both preview types.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
