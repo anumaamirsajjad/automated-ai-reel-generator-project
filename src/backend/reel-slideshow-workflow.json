@@ -1,5 +1,5 @@
 {
-  "name": "AI Reel Generator Pipeline",
+  "name": "AI Reel Generator Pipeline FIXED",
   "nodes": [
     {
       "parameters": {
@@ -7,7 +7,7 @@
         "httpMethod": "POST",
         "responseMode": "responseNode"
       },
-      "id": "Webhook",
+      "id": "webhook1",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -18,9 +18,10 @@
       "parameters": {
         "functionCode": "return [{ json: { prompt: $json.prompt, sceneCount: $json.sceneCount || 5 } }];"
       },
-      "id": "PrepareInput",
+      "id": "prepare1",
       "name": "Prepare Input",
       "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
       "position": [400, 300]
     },
 
@@ -29,13 +30,16 @@
         "requestMethod": "POST",
         "url": "https://api.groq.com/openai/v1/chat/completions",
         "jsonParameters": true,
-        "options": {},
-        "bodyParametersJson": "={\n  \"model\": \"mixtral-8x7b-32768\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate {{$json.sceneCount}} cinematic image prompts for: {{$json.prompt}}. Return as JSON array.\"\n    }\n  ]\n}"
+        "bodyParametersJson": "={\n  \"model\": \"mixtral-8x7b-32768\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate {{$json.sceneCount}} cinematic image prompts for: {{$json.prompt}}. Return as a JSON array only.\"\n    }\n  ]\n}"
       },
-      "id": "Groq",
-      "name": "Generate Scenes (Groq)",
+      "id": "groq1",
+      "name": "Groq Scenes",
       "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
       "position": [600, 300],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 2000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "groq-api",
@@ -46,21 +50,24 @@
 
     {
       "parameters": {
-        "functionCode": "const text = items[0].json.choices[0].message.content;\nlet scenes;\ntry { scenes = JSON.parse(text); } catch { scenes = text.split(\"\\n\"); }\nreturn scenes.map(s => ({ json: { scene: s } }));"
+        "functionCode": "const text = items[0].json.choices?.[0]?.message?.content || '';\nlet scenes = [];\n\ntry {\n  const parsed = JSON.parse(text);\n  scenes = Array.isArray(parsed) ? parsed : [];\n} catch (e) {\n  scenes = text\n    .split('\\n')\n    .map((line) => line.replace(/^\\s*[-*\\d.]+\\s*/, '').trim())\n    .filter(Boolean);\n}\n\nif (!scenes.length) {\n  throw new Error('No scenes could be parsed from AI response.');\n}\n\nreturn scenes.map((s, i) => ({ json: { scene: String(s), index: i } }));"
       },
-      "id": "ParseScenes",
+      "id": "parse1",
       "name": "Parse Scenes",
       "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
       "position": [800, 300]
     },
 
     {
       "parameters": {
-        "batchSize": 1
+        "batchSize": 1,
+        "options": {}
       },
-      "id": "Split",
+      "id": "split1",
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
       "position": [1000, 300]
     },
 
@@ -69,15 +76,19 @@
         "requestMethod": "POST",
         "url": "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2",
         "jsonParameters": true,
-        "bodyParametersJson": "={\"inputs\": $json.scene }",
+        "bodyParametersJson": "={\"inputs\": $json.scene}",
         "options": {
           "responseFormat": "file"
         }
       },
-      "id": "HF",
-      "name": "Generate Image (HF)",
+      "id": "hf1",
+      "name": "HF Image",
       "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
       "position": [1200, 300],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "hf-api",
@@ -88,19 +99,45 @@
 
     {
       "parameters": {
-        "filePath": "=/tmp/scene_{{$itemIndex}}.png"
+        "amount": 1500,
+        "unit": "milliseconds"
       },
-      "id": "SaveImage",
+      "id": "wait1",
+      "name": "Throttle Requests",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1500, 300]
+    },
+
+    {
+      "parameters": {
+        "fileName": "scene_{{$json.index}}.png",
+        "dataPropertyName": "data",
+        "filePath": "/tmp/"
+      },
+      "id": "save1",
       "name": "Save Image",
       "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
       "position": [1400, 300]
     },
 
     {
-      "parameters": {},
-      "id": "Merge",
-      "name": "Merge",
-      "type": "n8n-nodes-base.merge",
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$node[\"Split In Batches\"].context[\"totalItems\"]}}",
+              "operation": "larger",
+              "value2": "={{$itemIndex + 1}}"
+            }
+          ]
+        }
+      },
+      "id": "if1",
+      "name": "More Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
       "position": [1600, 300]
     },
 
@@ -108,29 +145,32 @@
       "parameters": {
         "command": "ffmpeg -y -framerate 1/3 -i /tmp/scene_%d.png -c:v libx264 -pix_fmt yuv420p /tmp/output.mp4"
       },
-      "id": "FFmpeg",
+      "id": "ffmpeg1",
       "name": "Create Video",
       "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
       "position": [1800, 300]
     },
 
     {
       "parameters": {
-        "functionCode": "const fileName = `video_${Date.now()}.mp4`;\nreturn [{ json: { fileName, publicPath: `/public/videos/${fileName}`, url: `/videos/${fileName}` } }];"
+        "functionCode": "const fileName = `video_${Date.now()}.mp4`;\nreturn [{ json: { fileName, url: `/videos/${fileName}` } }];"
       },
-      "id": "FileName",
+      "id": "filename1",
       "name": "Generate File Name",
       "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
       "position": [2000, 300]
     },
 
     {
       "parameters": {
-        "command": "mv /tmp/output.mp4 {{$json.publicPath}}"
+        "command": "mv /tmp/output.mp4 /app/public/videos/{{$json.fileName}}"
       },
-      "id": "MoveVideo",
+      "id": "move1",
       "name": "Move Video",
       "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
       "position": [2200, 300]
     },
 
@@ -138,9 +178,10 @@
       "parameters": {
         "command": "rm /tmp/scene_*.png"
       },
-      "id": "Cleanup",
-      "name": "Cleanup Temp",
+      "id": "clean1",
+      "name": "Cleanup",
       "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
       "position": [2400, 300]
     },
 
@@ -148,9 +189,10 @@
       "parameters": {
         "query": "INSERT INTO Videos (video_url, created_at) VALUES ('{{$json.url}}', GETDATE())"
       },
-      "id": "DB",
-      "name": "Save to MSSQL",
+      "id": "db1",
+      "name": "Save to DB",
       "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1,
       "position": [2600, 300],
       "credentials": {
         "microsoftSql": {
@@ -162,28 +204,58 @@
 
     {
       "parameters": {
-        "responseBody": "={\"success\": true, \"videoUrl\": $json.url }"
+        "responseBody": "={\"success\": true, \"videoUrl\": $json.url}"
       },
-      "id": "Response",
-      "name": "Respond",
+      "id": "resp1",
+      "name": "Response",
       "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
       "position": [2800, 300]
     }
   ],
 
   "connections": {
-    "Webhook": { "main": [[{ "node": "Prepare Input", "type": "main" }]] },
-    "Prepare Input": { "main": [[{ "node": "Groq", "type": "main" }]] },
-    "Groq": { "main": [[{ "node": "Parse Scenes", "type": "main" }]] },
-    "Parse Scenes": { "main": [[{ "node": "Split", "type": "main" }]] },
-    "Split": { "main": [[{ "node": "Generate Image (HF)", "type": "main" }]] },
-    "Generate Image (HF)": { "main": [[{ "node": "Save Image", "type": "main" }]] },
-    "Save Image": { "main": [[{ "node": "Merge", "type": "main" }]] },
-    "Merge": { "main": [[{ "node": "Create Video", "type": "main" }]] },
-    "Create Video": { "main": [[{ "node": "Generate File Name", "type": "main" }]] },
-    "Generate File Name": { "main": [[{ "node": "Move Video", "type": "main" }]] },
-    "Move Video": { "main": [[{ "node": "Cleanup Temp", "type": "main" }]] },
-    "Cleanup Temp": { "main": [[{ "node": "Save to MSSQL", "type": "main" }]] },
-    "Save to MSSQL": { "main": [[{ "node": "Respond", "type": "main" }]] }
+    "Webhook": {
+      "main": [[{ "node": "Prepare Input", "type": "main" }]]
+    },
+    "Prepare Input": {
+      "main": [[{ "node": "Groq Scenes", "type": "main" }]]
+    },
+    "Groq Scenes": {
+      "main": [[{ "node": "Parse Scenes", "type": "main" }]]
+    },
+    "Parse Scenes": {
+      "main": [[{ "node": "Split In Batches", "type": "main" }]]
+    },
+    "Split In Batches": {
+      "main": [
+        [{ "node": "HF Image", "type": "main" }],
+        [{ "node": "Create Video", "type": "main" }]
+      ]
+    },
+    "HF Image": {
+      "main": [[{ "node": "Save Image", "type": "main" }]]
+    },
+    "Save Image": {
+      "main": [[{ "node": "Throttle Requests", "type": "main" }]]
+    },
+    "Throttle Requests": {
+      "main": [[{ "node": "Split In Batches", "type": "main" }]]
+    },
+    "Create Video": {
+      "main": [[{ "node": "Generate File Name", "type": "main" }]]
+    },
+    "Generate File Name": {
+      "main": [[{ "node": "Move Video", "type": "main" }]]
+    },
+    "Move Video": {
+      "main": [[{ "node": "Cleanup", "type": "main" }]]
+    },
+    "Cleanup": {
+      "main": [[{ "node": "Save to DB", "type": "main" }]]
+    },
+    "Save to DB": {
+      "main": [[{ "node": "Response", "type": "main" }]]
+    }
   }
 }
