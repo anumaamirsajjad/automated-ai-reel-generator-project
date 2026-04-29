@@ -1,4 +1,6 @@
-export default function Navbar({ page, setPage }) {
+import { useEffect } from "react";
+
+export default function Navbar({ page, setPage, generationStatus = "idle" }) {
   const NAV = ["Dashboard", "Create", "Gallery", "Templates", "Settings"];
   const ICONS = {
     Dashboard: "⊞",
@@ -7,6 +9,18 @@ export default function Navbar({ page, setPage }) {
     Templates: "▶",
     Settings: "⚙",
   };
+
+  useEffect(() => {
+    const handleSettingsUpdate = (event) => {
+      const updatedSettings = event.detail;
+      if (updatedSettings) {
+        console.log("Settings updated:", updatedSettings);
+      }
+    };
+
+    window.addEventListener("settings-updated", handleSettingsUpdate);
+    return () => window.removeEventListener("settings-updated", handleSettingsUpdate);
+  }, []);
 
   return (
     <header
@@ -55,25 +69,42 @@ export default function Navbar({ page, setPage }) {
         </div>
 
         {/* Quick Create button */}
-        <button
-          onClick={() => setPage("Create")}
-          style={{
-            padding: "10px 20px",
-            border: "none",
-            borderRadius: 10,
-            background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            boxShadow: "0 4px 12px rgba(124,58,237,0.35)",
-          }}
-        >
-          + Quick Create
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {generationStatus === "running" && (
+            <span
+              style={{
+                padding: "7px 10px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#6d28d9",
+                background: "#ede9fe",
+                border: "1px solid #ddd6fe",
+              }}
+            >
+              Rendering...
+            </span>
+          )}
+          <button
+            onClick={() => setPage("Create")}
+            style={{
+              padding: "10px 20px",
+              border: "none",
+              borderRadius: 10,
+              background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 14,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              boxShadow: "0 4px 12px rgba(124,58,237,0.35)",
+            }}
+          >
+            + Quick Create
+          </button>
+        </div>
       </div>
 
       {/* Nav tabs */}

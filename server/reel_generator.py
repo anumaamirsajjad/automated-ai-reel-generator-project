@@ -62,6 +62,20 @@ def wait(ms: int) -> None:
     time.sleep(ms / 1000.0)
 
 
+def escape_drawtext(text: str) -> str:
+    return (
+        text.replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("'", "\\'")
+        .replace("%", "\\%")
+    )
+
+
+def quality_audio_frequency(quality: str, motion_preset: int) -> int:
+    base = {"High (1080p)": 280, "Medium (720p)": 240, "Low (480p)": 200}.get(quality, 260)
+    return base + (motion_preset % 4) * 18
+
+
 def generate_huggingface_image_to_file(scene_prompt: str, width: int, height: int, output_path: Path, max_attempts: int = 2) -> None:
     if not HF_API_TOKEN:
         raise RuntimeError("HF_API_TOKEN is not configured in environment")
@@ -117,7 +131,7 @@ def download_image_with_retry(url: str, output_path: Path, max_attempts: int = 2
     raise last_error or RuntimeError("Unknown download error")
 
 
-def render_cinematic_fallback_clip(output_path: Path, width: int, height: int, duration_seconds: float, motion_preset: int = 0) -> None:
+def render_cinematic_fallback_clip(output_path: Path, width: int, height: int, duration_seconds: float, motion_preset: int = 0, quality: str = "High (1080p)") -> None:
     """Render a no-network fallback clip when image generation fails.
 
     This prevents a 500 for transient provider/network timeouts by creating
@@ -131,32 +145,24 @@ def render_cinematic_fallback_clip(output_path: Path, width: int, height: int, d
 
     ffmpeg_exe = resolve_ffmpeg_executable()
     source = f"color=c={color}:s={width}x{height}:r=30:d={duration_seconds}"
-    video_filter = f"fade=t=in:st=0:d=0.14,fade=t=out:st={fade_out_start}:d=0.18,format=yuv420p"
+    filters = [f"fade=t=in:st=0:d=0.14", f"fade=t=out:st={fade_out_start}:d=0.18"]
+    filters.append("format=yuv420p")
+    video_filter = ",".join(filters)
 
-    cmd = [
-        ffmpeg_exe,
-        "-y",
-        "-f",
-        "lavfi",
-        "-i",
-        source,
-        "-vf",
-        video_filter,
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-movflags",
-        "+faststart",
-        "-pix_fmt",
-        "yuv420p",
-        str(output_path),
-    ]
+    command = [ffmpeg_exe, "-y", "-f", "lavfi", "-i", source]
+    command.extend([
+        "-vf", video_filter,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-movflags", "+faststart",
+        "-pix_fmt", "yuv420p",
+    ])
+    command.append(str(output_path))
 
-    subprocess.run(cmd, check=True)
+    subprocess.run(command, check=True)
 
 
-def render_cinematic_video_from_image(input_path: Path, output_path: Path, width: int, height: int, duration_seconds: float, motion_preset: int = 0) -> None:
+def render_cinematic_video_from_image(input_path: Path, output_path: Path, width: int, height: int, duration_seconds: float, motion_preset: int = 0, quality: str = "High (1080p)") -> None:
     # Mirror JS logic: compute frames and motion frequencies
     total_frames = max(1, math.floor(duration_seconds * 30))
     normalized_preset = (int(motion_preset) % 4 + 4) % 4
@@ -177,17 +183,14 @@ def render_cinematic_video_from_image(input_path: Path, output_path: Path, width
     fade_out = f"fade=t=out:st={fade_out_start}:d=0.18"
     format_filter = "format=yuv420p"
 
-    motion_filter = ",".join([scale_filter, zoompan, fade_in, fade_out, format_filter])
+    filters = [scale_filter, zoompan, fade_in, fade_out]
+    filters.append(format_filter)
+    motion_filter = ",".join(filters)
 
     ffmpeg_exe = resolve_ffmpeg_executable()
 
-    cmd = [
-        ffmpeg_exe,
-        "-y",
-        "-loop",
-        "1",
-        "-i",
-        str(input_path),
+    cmd = [ffmpeg_exe, "-y", "-loop", "1", "-i", str(input_path)]
+    cmd.extend([
         "-t",
         str(duration_seconds),
         "-vf",
@@ -200,8 +203,8 @@ def render_cinematic_video_from_image(input_path: Path, output_path: Path, width
         "+faststart",
         "-pix_fmt",
         "yuv420p",
-        str(output_path),
-    ]
+    ])
+    cmd.append(str(output_path))
 
     # Run ffmpeg and raise on errors
     subprocess.run(cmd, check=True)

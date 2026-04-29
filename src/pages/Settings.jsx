@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { buildApiUrl } from "../lib/api";
 
-function Toggle({ on, onChange }) {
+function Toggle({ on, onChange, disabled = false }) {
   return (
     <div
-      onClick={() => onChange(!on)}
+      onClick={() => {
+        if (!disabled) onChange(!on);
+      }}
       style={{
         width: 44, height: 24, borderRadius: 12, cursor: "pointer",
-        background: on ? "#1a1a2e" : "#d1d5db",
+        background: disabled ? "#e5e7eb" : on ? "#1a1a2e" : "#d1d5db",
         position: "relative", transition: "background 0.2s", flexShrink: 0,
+        opacity: disabled ? 0.6 : 1,
       }}
     >
       <div style={{
@@ -55,7 +59,7 @@ function Section({ title, desc, children }) {
   );
 }
 
-function ToggleRow({ label, desc, on, onChange }) {
+function ToggleRow({ label, desc, on, onChange, disabled = false }) {
   return (
     <div style={{
       display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -65,81 +69,190 @@ function ToggleRow({ label, desc, on, onChange }) {
         <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#1a1a2e" }}>{label}</p>
         {desc && <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{desc}</p>}
       </div>
-      <Toggle on={on} onChange={onChange} />
+      <Toggle on={on} onChange={onChange} disabled={disabled} />
     </div>
   );
 }
 
-function SocialRow({ icon, name, handle, connected, onToggle }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "16px 20px", border: "1px solid #f3f4f6",
-      borderRadius: 12, marginBottom: 10,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12,
-          background: "#f3f4f6", display: "flex",
-          alignItems: "center", justifyContent: "center", fontSize: 22,
-        }}>{icon}</div>
-        <div>
-          <p style={{ margin: "0 0 2px", fontWeight: 600, fontSize: 15, color: "#1a1a2e" }}>{name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-            {connected ? handle : "Not connected"}
-          </p>
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {connected && (
-          <span style={{
-            background: "#dcfce7", color: "#15803d",
-            padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-          }}>✓ Connected</span>
-        )}
-        <button
-          onClick={onToggle}
-          style={{
-            padding: "8px 18px", border: "1.5px solid #e5e7eb", borderRadius: 8,
-            background: "#fff", color: "#374151", fontWeight: 600,
-            fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >{connected ? "Disconnect" : "Connect"}</button>
-      </div>
-    </div>
-  );
-}
+
 
 export default function Settings() {
-  const [igConnected,   setIgConnected]   = useState(true);
-  const [fbConnected,   setFbConnected]   = useState(false);
-  const [ttConnected,   setTtConnected]   = useState(false);
-  const [ytConnected,   setYtConnected]   = useState(false);
-
-  const [autoPost,      setAutoPost]      = useState(false);
-  const [crossPost,     setCrossPost]     = useState(true);
-  const [postTime,      setPostTime]      = useState("Post Immediately");
-  const [optimalTime,   setOptimalTime]   = useState("Auto (AI-optimized)");
+  const [reminderTime,  setReminderTime]  = useState("09:00");
+  const [reminderEnabled, setReminderEnabled] = useState(true);
+  const [reminderFrequency, setReminderFrequency] = useState("daily");
+  const [selectedDates, setSelectedDates] = useState([]); // YYYY-MM-DD strings
+  const [selectedDays, setSelectedDays] = useState([]); // 0-6 numbers (Sun=0)
 
   const [artStyle,      setArtStyle]      = useState("Realistic");
   const [duration,      setDuration]      = useState("10 seconds");
   const [quality,       setQuality]       = useState("High (1080p)");
-  const [autoCaptions,  setAutoCaptions]  = useState(true);
-  const [autoHashtags,  setAutoHashtags]  = useState(true);
-  const [bgMusic,       setBgMusic]       = useState(true);
+  const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useState(true);
 
-  const [notifGen,      setNotifGen]      = useState(true);
-  const [notifSched,    setNotifSched]    = useState(true);
-  const [notifTemp,     setNotifTemp]     = useState(false);
-
-  const [openaiKey,     setOpenaiKey]     = useState("");
-  const [stabilityKey,  setStabilityKey]  = useState("");
+  const [showQuickTips,       setShowQuickTips]       = useState(true);
+  const [focusPromptOnCreate, setFocusPromptOnCreate] = useState(true);
 
   const [saved,         setSaved]         = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [initialSnapshot, setInitialSnapshot] = useState(null);
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "denied"
+  );
+
+  const buildSettingsPayload = () => ({
+    reminderTime,
+    reminderEnabled,
+    reminderFrequency,
+    selectedDates,
+    selectedDays,
+    artStyle,
+    duration,
+    quality,
+    desktopNotificationsEnabled,
+    showQuickTips,
+    focusPromptOnCreate,
+  });
+
+  const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== JSON.stringify(buildSettingsPayload());
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch(buildApiUrl("/api/settings"));
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const settings = data.settings || {};
+        if (typeof settings.reminderTime === "string") setReminderTime(settings.reminderTime);
+        if (typeof settings.reminderEnabled === "boolean") setReminderEnabled(settings.reminderEnabled);
+        if (typeof settings.reminderFrequency === "string") setReminderFrequency(settings.reminderFrequency);
+        if (Array.isArray(settings.selectedDates)) setSelectedDates(settings.selectedDates);
+        if (Array.isArray(settings.selectedDays)) setSelectedDays(settings.selectedDays);
+        if (typeof settings.artStyle === "string") setArtStyle(settings.artStyle);
+        if (typeof settings.duration === "string") setDuration(settings.duration);
+        if (typeof settings.quality === "string") setQuality(settings.quality);
+        if (typeof settings.desktopNotificationsEnabled === "boolean") setDesktopNotificationsEnabled(settings.desktopNotificationsEnabled);
+        if (typeof settings.showQuickTips === "boolean") setShowQuickTips(settings.showQuickTips);
+        if (typeof settings.focusPromptOnCreate === "boolean") setFocusPromptOnCreate(settings.focusPromptOnCreate);
+
+        const snapshot = {
+          reminderTime: typeof settings.reminderTime === "string" ? settings.reminderTime : "09:00",
+          reminderEnabled: typeof settings.reminderEnabled === "boolean" ? settings.reminderEnabled : true,
+          reminderFrequency: typeof settings.reminderFrequency === "string" ? settings.reminderFrequency : "daily",
+          selectedDates: Array.isArray(settings.selectedDates) ? settings.selectedDates : [],
+          selectedDays: Array.isArray(settings.selectedDays) ? settings.selectedDays : [],
+          artStyle: typeof settings.artStyle === "string" ? settings.artStyle : "Realistic",
+          duration: typeof settings.duration === "string" ? settings.duration : "10 seconds",
+          quality: typeof settings.quality === "string" ? settings.quality : "High (1080p)",
+          desktopNotificationsEnabled: typeof settings.desktopNotificationsEnabled === "boolean" ? settings.desktopNotificationsEnabled : true,
+          showQuickTips: typeof settings.showQuickTips === "boolean" ? settings.showQuickTips : true,
+          focusPromptOnCreate: typeof settings.focusPromptOnCreate === "boolean" ? settings.focusPromptOnCreate : true,
+        };
+        setInitialSnapshot(JSON.stringify(snapshot));
+      } catch {
+        // Keep defaults if the backend is unavailable.
+        setInitialSnapshot(JSON.stringify(buildSettingsPayload()));
+      }
+    };
+
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    if (typeof Notification !== "undefined") {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!reminderEnabled && desktopNotificationsEnabled) {
+      setDesktopNotificationsEnabled(false);
+    }
+  }, [reminderEnabled, desktopNotificationsEnabled]);
+
+  const requestNotificationPermission = async () => {
+    if (typeof Notification === "undefined") return;
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+    } catch {
+      setNotificationPermission("denied");
+    }
+  };
 
   const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (!hasUnsavedChanges || saving) return;
+
+    const saveSettings = async () => {
+      const payload = buildSettingsPayload();
+
+      try {
+        setSaving(true);
+
+        const response = await fetch(buildApiUrl("/api/settings"), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save settings");
+        }
+
+        window.dispatchEvent(new CustomEvent("settings-updated", { detail: payload }));
+
+        setSaved(true);
+        setInitialSnapshot(JSON.stringify(payload));
+        setTimeout(() => setSaved(false), 2000);
+      } catch {
+        setSaved(false);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    saveSettings();
+  };
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch(buildApiUrl("/api/settings"));
+        if (response.ok) {
+          const data = await response.json();
+          setReminderTime(data.reminderTime || "09:00");
+          setReminderEnabled(data.reminderEnabled || false);
+          setReminderFrequency(data.reminderFrequency || "daily");
+          setArtStyle(data.artStyle || "Realistic");
+          setDuration(data.duration || "10 seconds");
+          setQuality(data.quality || "High (1080p)");
+          setShowQuickTips(data.showQuickTips || true);
+          setFocusPromptOnCreate(data.focusPromptOnCreate || true);
+        }
+      } catch (error) {
+        console.error("Failed to fetch settings:", error);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  const saveSettings = async (updatedSettings) => {
+    try {
+      setSaving(true);
+      const response = await fetch(buildApiUrl("/api/settings"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedSettings),
+      });
+      if (response.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -151,52 +264,153 @@ export default function Settings() {
         Manage your account and integration preferences
       </p>
 
-      {/* ── Social Media Accounts ── */}
-      <Section
-        title="Social Media Accounts"
-        desc="Connect your social media accounts to enable automated posting"
-      >
-        <SocialRow icon="📸" name="Instagram"      handle="@your_username" connected={igConnected} onToggle={() => setIgConnected(!igConnected)} />
-        <SocialRow icon="👤" name="Facebook"        handle=""               connected={fbConnected} onToggle={() => setFbConnected(!fbConnected)} />
-        <SocialRow icon="🎵" name="TikTok"          handle=""               connected={ttConnected} onToggle={() => setTtConnected(!ttConnected)} />
-        <SocialRow icon="▶️" name="YouTube Shorts"  handle=""               connected={ytConnected} onToggle={() => setYtConnected(!ytConnected)} />
-      </Section>
+      {/* Instagram account feature removed */}
 
-      {/* ── Posting Preferences ── */}
+      {/* ── Set a Reminder to Post ── */}
       <Section
-        title="Posting Preferences"
-        desc="Configure how and when your content is posted"
+        title="Set a Reminder to Post"
+        desc="Get reminded when it's time to post your reels"
       >
-        <ToggleRow
-          label="Auto-post After Generation"
-          desc="Automatically post reels immediately after generation"
-          on={autoPost} onChange={setAutoPost}
-        />
-        <div style={{ marginTop: 16, marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Default Posting Time
-          </label>
-          <SelectInput
-            value={postTime}
-            options={["Post Immediately", "Schedule for Later", "Best Time (AI)"]}
-            onChange={setPostTime}
-          />
-        </div>
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Optimal Posting Time
+            Reminder Time
           </label>
-          <SelectInput
-            value={optimalTime}
-            options={["Auto (AI-optimized)", "Morning (8-10 AM)", "Afternoon (12-2 PM)", "Evening (6-8 PM)"]}
-            onChange={setOptimalTime}
+          <input
+            type="time"
+            value={reminderTime}
+            onChange={(e) => setReminderTime(e.target.value)}
+            style={{
+              width: "100%", padding: "12px 16px",
+              background: "#fefce8", border: "1px solid #e5e7eb",
+              borderRadius: 8, fontSize: 13, fontFamily: "inherit",
+              outline: "none", boxSizing: "border-box",
+            }}
           />
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: "#9ca3af" }}>
+            You'll receive a reminder at the selected time according to the schedule below.
+          </p>
         </div>
+
         <ToggleRow
-          label="Cross-post to All Platforms"
-          desc="Post to all connected platforms simultaneously"
-          on={crossPost} onChange={setCrossPost}
+          label="Desktop Notifications"
+          desc="Turn reminder popups on or off"
+          on={desktopNotificationsEnabled}
+          onChange={(next) => {
+            setDesktopNotificationsEnabled(next);
+            if (next && notificationPermission === "default") {
+              requestNotificationPermission();
+            }
+          }}
+          disabled={!reminderEnabled}
         />
+        {reminderEnabled && desktopNotificationsEnabled && (
+          <div style={{ margin: "8px 0 12px", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fafafa" }}>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: "#4b5563" }}>
+              Browser permission: <strong>{notificationPermission}</strong>
+            </p>
+            {notificationPermission !== "granted" && (
+              <button
+                onClick={requestNotificationPermission}
+                style={{
+                  padding: "7px 10px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "#7c3aed",
+                  color: "#fff",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Enable Browser Notifications
+              </button>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+            Frequency
+          </label>
+          <select
+            value={reminderFrequency}
+            onChange={(e) => setReminderFrequency(e.target.value)}
+            style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff" }}
+          >
+            <option value="daily">Daily</option>
+            <option value="specific-dates">Specific dates</option>
+            <option value="specific-days">Specific days of week</option>
+          </select>
+        </div>
+
+        {reminderFrequency === "specific-dates" && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              Add Date
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input type="date" id="reminder-date-input" style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              <button
+                onClick={() => {
+                  const el = document.getElementById("reminder-date-input");
+                  if (!el || !el.value) return;
+                  if (!selectedDates.includes(el.value)) setSelectedDates([...selectedDates, el.value]);
+                  el.value = "";
+                }}
+                style={{ padding: "8px 12px", borderRadius: 8, background: "#7c3aed", color: "#fff", border: "none" }}
+              >Add</button>
+            </div>
+            <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {selectedDates.map((d, i) => (
+                <div key={d} style={{ background: "#f3f4f6", padding: "6px 10px", borderRadius: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13 }}>{d}</span>
+                  <button onClick={() => setSelectedDates(selectedDates.filter((_, idx) => idx !== i))} style={{ border: "none", background: "transparent", cursor: "pointer" }}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {reminderFrequency === "specific-days" && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              Select Days
+            </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, idx) => {
+                const active = selectedDays.includes(idx);
+                return (
+                  <button key={d} onClick={() => {
+                    if (active) setSelectedDays(selectedDays.filter(sd => sd !== idx)); else setSelectedDays([...selectedDays, idx]);
+                  }}
+                    style={{
+                      padding: "8px 12px", borderRadius: 8, border: active ? '1px solid #7c3aed' : '1px solid #e5e7eb',
+                      background: active ? '#f5dfff' : '#fff', cursor: 'pointer'
+                    }}>{d}</button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 12 }}>
+          <ToggleRow label="Enable Reminder" desc="Turn the reminder on or off" on={reminderEnabled} onChange={setReminderEnabled} />
+        </div>
+        {reminderEnabled && (
+          <div style={{
+            background: "#f0fdf4", border: "1px solid #dcfce7",
+            borderRadius: 10, padding: "12px 16px",
+            display: "flex", alignItems: "flex-start", gap: 10,
+          }}>
+            <span style={{ color: "#15803d", fontSize: 16, flexShrink: 0 }}>🔔</span>
+            <div style={{ margin: 0, fontSize: 13, color: "#166534" }}>
+              <div>Reminder time: <strong>{reminderTime}</strong></div>
+              {reminderFrequency === 'daily' && <div>Frequency: <strong>Daily</strong></div>}
+              {reminderFrequency === 'specific-dates' && <div>Dates: <strong>{selectedDates.length ? selectedDates.join(', ') : 'No dates set'}</strong></div>}
+              {reminderFrequency === 'specific-days' && <div>Days: <strong>{selectedDays.length ? selectedDays.map(i => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][i]).join(', ') : 'No days selected'}</strong></div>}
+            </div>
+          </div>
+        )}
       </Section>
 
       {/* ── Generation Settings ── */}
@@ -234,76 +448,17 @@ export default function Settings() {
             onChange={setQuality}
           />
         </div>
-        <ToggleRow label="Auto-generate Captions" desc="Automatically create captions for all reels"  on={autoCaptions} onChange={setAutoCaptions} />
-        <ToggleRow label="Auto-generate Hashtags" desc="Add relevant hashtags to increase reach"       on={autoHashtags} onChange={setAutoHashtags} />
-        <ToggleRow label="Add Background Music"   desc="Include royalty-free music by default"         on={bgMusic}      onChange={setBgMusic}      />
       </Section>
 
-      {/* ── Notifications ── */}
+      {/* ── Workspace Features ── */}
       <Section
-        title="Notifications"
-        desc="Choose what updates you want to receive"
+        title="Workspace Features"
+        desc="Choose how the app behaves while you create"
       >
-        <ToggleRow label="🔔 Generation Complete"      desc="Notify when reel generation is finished"          on={notifGen}   onChange={setNotifGen}   />
-        <ToggleRow label="🕐 Scheduled Post Reminders" desc="Get reminded before scheduled posts go live"      on={notifSched} onChange={setNotifSched} />
-        <ToggleRow label="🧩 New Templates"            desc="Get notified about new template releases"         on={notifTemp}  onChange={setNotifTemp}  />
-      </Section>
-
-      {/* ── API Configuration ── */}
-      <Section
-        title="API Configuration"
-        desc="Configure external API keys for image generation (Optional)"
-      >
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            OpenAI API Key
-          </label>
-          <input
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-            placeholder="sk-YOUR_API_KEY_HERE"
-            style={{
-              width: "100%", padding: "12px 16px",
-              background: "#fefce8", border: "1px solid #e5e7eb",
-              borderRadius: 8, fontSize: 13, fontFamily: "monospace",
-              outline: "none", boxSizing: "border-box",
-            }}
-          />
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: "#9ca3af" }}>
-            Used for advanced AI image generation (optional)
-          </p>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Stability AI API Key
-          </label>
-          <input
-            value={stabilityKey}
-            onChange={(e) => setStabilityKey(e.target.value)}
-            placeholder="sk-..."
-            style={{
-              width: "100%", padding: "12px 16px",
-              background: "#fefce8", border: "1px solid #e5e7eb",
-              borderRadius: 8, fontSize: 13, fontFamily: "monospace",
-              outline: "none", boxSizing: "border-box",
-            }}
-          />
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: "#9ca3af" }}>
-            Alternative image generation service (optional)
-          </p>
-        </div>
-
-        {/* Warning box */}
-        <div style={{
-          background: "#fefce8", border: "1px solid #fde68a",
-          borderRadius: 10, padding: "12px 16px",
-          display: "flex", alignItems: "flex-start", gap: 10,
-        }}>
-          <span style={{ color: "#d97706", fontSize: 16, flexShrink: 0 }}>⚠</span>
-          <p style={{ margin: 0, fontSize: 13, color: "#92400e" }}>
-            API keys are stored securely and never shared. The app works with mock data by default.
-          </p>
+        <ToggleRow label="Show Quick Tips" desc="Display helper tips on the Create page" on={showQuickTips} onChange={setShowQuickTips} />
+        <ToggleRow label="Focus Prompt on Open" desc="Place the cursor in the prompt box when Create opens" on={focusPromptOnCreate} onChange={setFocusPromptOnCreate} />
+        <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 12, background: "#f8fafc", border: "1px solid #e5e7eb", color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
+          These settings are used by the Create page and saved with your generation defaults.
         </div>
       </Section>
 
@@ -317,17 +472,22 @@ export default function Settings() {
 
         <button
           onClick={handleSave}
+          disabled={!hasUnsavedChanges || saving}
           style={{
             padding: "11px 24px", border: "none", borderRadius: 10,
             background: saved
               ? "linear-gradient(135deg,#22c55e,#16a34a)"
               : "linear-gradient(135deg,#7c3aed,#6d28d9)",
-            color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+            color: "#fff", fontWeight: 700, fontSize: 14,
+            cursor: !hasUnsavedChanges || saving ? "not-allowed" : "pointer",
+            opacity: !hasUnsavedChanges || saving ? 0.55 : 1,
             display: "flex", alignItems: "center", gap: 8,
             fontFamily: "inherit", transition: "background 0.3s",
           }}
-        >{saved ? "✓ Saved!" : "💾 Save Changes"}</button>
+        >{saved ? "✓ Saved!" : saving ? "Saving..." : "💾 Save Changes"}</button>
       </div>
     </div>
   );
 }
+
+

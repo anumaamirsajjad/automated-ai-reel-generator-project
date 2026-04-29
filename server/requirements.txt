@@ -1,3 +1,4 @@
 flask
 requests
+flask-cors
 # ffmpeg must be installed on the system and available on PATH

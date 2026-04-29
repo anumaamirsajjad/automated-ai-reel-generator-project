@@ -1,0 +1,18 @@
+{
+  "reminderTime": "09:00",
+  "reminderEnabled": false,
+  "reminderFrequency": "daily",
+  "selectedDates": [
+    "2026-04-30"
+  ],
+  "selectedDays": [],
+  "artStyle": "Realistic",
+  "duration": "10 seconds",
+  "quality": "High (1080p)",
+  "autoCaptions": true,
+  "autoHashtags": true,
+  "bgMusic": true,
+  "notifGen": true,
+  "notifSched": true,
+  "notifTemp": false
+}
