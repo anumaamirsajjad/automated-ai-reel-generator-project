@@ -1,4 +1,7 @@
 flask
 requests
 flask-cors
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-JWT-Extended
 # ffmpeg must be installed on the system and available on PATH

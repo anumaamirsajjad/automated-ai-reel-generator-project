@@ -8,11 +8,35 @@ import Settings    from "./pages/Settings";
 import { subscribeGeneration } from "./services/reelGenerationManager";
 import { buildApiUrl } from "./lib/api";
 import { useReminder } from "./hooks/useReminder";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Welcome from "./pages/Welcome";
 
-export default function App() {
-  const [page, setPage] = useState("Create");
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <div style={{ color: 'white', fontSize: '18px' }}>Loading...</div>
+      </div>
+    );
+  }
+
+  return isAuthenticated() ? children : <Navigate to="/" replace />;
+};
+
+// App Content Component
+const AppContent = () => {
+  const { isAuthenticated } = useAuth();
+
   const [globalNotice, setGlobalNotice] = useState(null);
   const [generationStatus, setGenerationStatus] = useState("idle");
   const [reminderConfig, setReminderConfig] = useState({
@@ -99,83 +123,88 @@ export default function App() {
     const onSettingsUpdated = (event) => {
       const payload = event?.detail;
       if (!payload) return;
-
-      setReminderConfig((current) => ({
-        ...current,
-        reminderTime: typeof payload.reminderTime === "string" ? payload.reminderTime : current.reminderTime,
-        reminderEnabled: typeof payload.reminderEnabled === "boolean" ? payload.reminderEnabled : current.reminderEnabled,
-        reminderFrequency: typeof payload.reminderFrequency === "string" ? payload.reminderFrequency : current.reminderFrequency,
-        selectedDates: Array.isArray(payload.selectedDates) ? payload.selectedDates : current.selectedDates,
-        selectedDays: Array.isArray(payload.selectedDays) ? payload.selectedDays : current.selectedDays,
-        desktopNotificationsEnabled:
-          typeof payload.desktopNotificationsEnabled === "boolean"
-            ? payload.desktopNotificationsEnabled
-            : current.desktopNotificationsEnabled,
-      }));
+      setReminderConfig((current) => ({ ...current, ...payload }));
     };
 
-    window.addEventListener("settings-updated", onSettingsUpdated);
-    return () => window.removeEventListener("settings-updated", onSettingsUpdated);
+    window.addEventListener("settingsUpdated", onSettingsUpdated);
+    return () => window.removeEventListener("settingsUpdated", onSettingsUpdated);
   }, []);
 
   useEffect(() => {
     const onReminderFired = (event) => {
-      const reminderTime = event?.detail?.reminderTime || reminderConfig.reminderTime;
-      setGlobalNotice({
-        type: "success",
-        text: `Reminder: it is time to post your reel${reminderTime ? ` (${reminderTime})` : ""}.`,
-      });
+      const payload = event?.detail;
+      if (!payload) return;
+      setGlobalNotice({ type: "info", text: payload.message });
     };
 
     window.addEventListener("reminder-fired", onReminderFired);
     return () => window.removeEventListener("reminder-fired", onReminderFired);
-  }, [reminderConfig.reminderTime]);
+  }, []);
 
   useEffect(() => {
     if (!globalNotice) return;
-    const timeoutId = setTimeout(() => setGlobalNotice(null), 5000);
+
+    const timeoutId = setTimeout(() => {
+      setGlobalNotice(null);
+    }, 5000);
+
     return () => clearTimeout(timeoutId);
   }, [globalNotice]);
 
-  const renderPage = () => {
-    if (page === "Dashboard") return <Dashboard  setPage={setPage} />;
-    if (page === "Create")    return <Create                       />;
-    if (page === "Gallery")   return <Gallery     setPage={setPage} />;
-    if (page === "Templates") return <Templates   setPage={setPage} />;
-    if (page === "Settings")  return <Settings                     />;
-  };
-
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      flexDirection: "column",
-      background: "#f8f8ff",
-      fontFamily: "'Segoe UI', system-ui, sans-serif",
-      overflowX: "hidden",
-    }}>
-      <Navbar page={page} setPage={setPage} generationStatus={generationStatus} />
-      <main style={{ flex: 1, minHeight: 0, width: "100%" }}>{renderPage()}</main>
-      {globalNotice && (
-        <div style={{
-          position: "fixed",
-          right: 18,
-          bottom: 18,
-          zIndex: 10020,
-          maxWidth: 340,
-          padding: "12px 14px",
-          borderRadius: 12,
-          fontSize: 13,
-          lineHeight: 1.45,
-          color: "#fff",
-          boxShadow: "0 12px 28px rgba(15,23,42,0.2)",
-          background: globalNotice.type === "error"
-            ? "linear-gradient(135deg,#dc2626,#b91c1c)"
-            : "linear-gradient(135deg,#16a34a,#15803d)",
-        }}>
-          {globalNotice.text}
-        </div>
-      )}
-    </div>
+    <Router>
+      <div className="min-h-screen bg-gray-100">
+        {isAuthenticated() && <Navbar generationStatus={generationStatus} />}
+        {globalNotice && (
+          <div
+            className={`p-4 text-white ${globalNotice.type === "success" ? "bg-green-500" : "bg-red-500"}`}
+            onClick={() => setGlobalNotice(null)}
+          >
+            {globalNotice.text}
+          </div>
+        )}
+        <main className="p-4">
+          <Routes>
+            <Route path="/" element={
+              isAuthenticated() ? <Navigate to="/create" replace /> : <Welcome />
+            } />
+            <Route path="/create" element={
+              <ProtectedRoute>
+                <Create setGlobalNotice={setGlobalNotice} />
+              </ProtectedRoute>
+            } />
+            <Route path="/gallery" element={
+              <ProtectedRoute>
+                <Gallery />
+              </ProtectedRoute>
+            } />
+            <Route path="/templates" element={
+              <ProtectedRoute>
+                <Templates />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings
+                  reminderConfig={reminderConfig}
+                  onUpdate={(newConfig) => {
+                    setReminderConfig(newConfig);
+                    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: newConfig }));
+                  }}
+                />
+              </ProtectedRoute>
+            } />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  );
+};
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

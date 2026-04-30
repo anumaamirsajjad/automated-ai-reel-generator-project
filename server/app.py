@@ -1,39 +1,77 @@
-# #!/usr/bin/env python3
-# """Flask server that implements the /api/reel-generator route in Python.
+import os
+import random
+import shutil
+import sys
+import json
+import traceback
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+from typing import List
+import uuid
 
-# This mirrors the Node flow: build scene prompts, generate or download images,
-# render cinematic clips with FFmpeg, concatenate clips, and expose the final
-# video under /generated/.
-# """
+from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 
-# from __future__ import annotations
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'  # Change this in production
+db = SQLAlchemy(app)
+jwt = JWTManager(app)
+migrate = Migrate(app, db)
+CORS(app)
 
-# import os
-# import random
-# import shutil
-# import sys
-# import json
-# import traceback
-# import subprocess
-# import tempfile
-# import time
-# from pathlib import Path
-# from typing import List
-# import uuid
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-# from flask import Flask, jsonify, request
-# import json
-# from pathlib import Path
+    def __repr__(self):
+        return f'<User {self.username}>'
 
-# from reel_generator import (
-#     download_image_with_retry,
-#     generate_huggingface_image_to_file,
-#     render_cinematic_fallback_clip,
-#     resolve_ffmpeg_executable,
-#     render_cinematic_video_from_image,
-# )
+class Setting(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.String(200), nullable=False)
 
-# app = Flask(__name__)
+    def __repr__(self):
+        return f'<Setting {self.key}>'
+
+class Gallery(db.Model):
+    id = db.Column(db.String(50), primary_key=True)
+    filename = db.Column(db.String(200), nullable=False)
+    url = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    caption = db.Column(db.Text, nullable=True)
+    style = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    size = db.Column(db.Integer, nullable=False)
+    generated = db.Column(db.Boolean, default=False)
+
+    def __repr__(self):
+        return f'<Gallery {self.title}>'
+
+class Event(db.Model):
+    id = db.Column(db.String(50), primary_key=True)
+    type = db.Column(db.String(50), nullable=False)
+    filename = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+
+    def __repr__(self):
+        return f'<Event {self.type} {self.filename}>'
+
+# Create tables
+with app.app_context():
+    db.create_all()
+
+# SETTINGS_FILE = Path("data/settings.json")
 
 # SETTINGS_FILE = Path("data/settings.json")
 # DEFAULT_SETTINGS = {
@@ -513,7 +551,79 @@
 #     finally:
 #         shutil.rmtree(temp_dir, ignore_errors=True)
 
+# Authentication routes
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
 
-# if __name__ == "__main__":
-#     # Run on port 5000 to match original backend
-#     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    if not username or not email or not password:
+        return jsonify({"message": "Username, email, and password are required"}), 400
+
+    if User.query.filter_by(email=email).first():
+        return jsonify({"message": "Email already registered"}), 400
+
+    if User.query.filter_by(username=username).first():
+        return jsonify({"message": "Username already taken"}), 400
+
+    hashed_password = generate_password_hash(password)
+    new_user = User(username=username, email=email, password_hash=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    access_token = create_access_token(identity=new_user.id)
+    return jsonify({
+        "message": "User created successfully",
+        "token": access_token,
+        "user": {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email
+        }
+    }), 201
+
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        return jsonify({"message": "Email and password are required"}), 400
+
+    user = User.query.filter_by(email=email).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        return jsonify({"message": "Invalid email or password"}), 401
+
+    access_token = create_access_token(identity=user.id)
+    return jsonify({
+        "message": "Login successful",
+        "token": access_token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }), 200
+
+
+@app.route("/api/protected", methods=["GET"])
+@jwt_required()
+def protected():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    return jsonify({
+        "message": f"Hello {user.username}!",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }), 200
+
+if __name__ == "__main__":
+    # Run on port 5000 to match original backend
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
