@@ -24,66 +24,113 @@ function formatDate(value) {
   }
 }
 
-function VideoCard({ item, onOpen }) {
+async function readJsonSafe(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    success: false,
+    error: text.slice(0, 200) || `Unexpected ${response.status} response`,
+  };
+}
+
+function VideoCard({ item, onOpen, onDelete }) {
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(item)}
-      style={{
-        border: "none",
-        padding: 0,
-        background: "transparent",
-        textAlign: "left",
-        cursor: "pointer",
-      }}
-    >
-      <div
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => onOpen(item)}
         style={{
-          borderRadius: 18,
-          overflow: "hidden",
-          background: "#0f172a",
-          boxShadow: "0 12px 30px rgba(15,23,42,0.12)",
-          transition: "transform 0.2s ease, box-shadow 0.2s ease",
+          border: "none",
+          padding: 0,
+          background: "transparent",
+          textAlign: "left",
+          cursor: "pointer",
+          width: "100%",
         }}
       >
-        <div style={{ aspectRatio: "9 / 16", background: "#020617" }}>
-          {item.thumbnailUrl ? (
-            <img
-              src={item.thumbnailUrl}
-              alt={item.title || item.originalFilename || "Video thumbnail"}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          ) : (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(180deg,#1e293b,#0f172a)" }}>
-              <div style={{ textAlign: "center", color: "#e2e8f0", padding: 16 }}>
-                <div style={{ fontSize: 34, marginBottom: 10 }}>▶</div>
-                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.3 }}>Thumbnail generating</div>
-                <div style={{ fontSize: 11, marginTop: 6, color: "#94a3b8" }}>Open the item to play the video</div>
+        <div
+          style={{
+            borderRadius: 18,
+            overflow: "hidden",
+            background: "#0f172a",
+            boxShadow: "0 12px 30px rgba(15,23,42,0.12)",
+            transition: "transform 0.2s ease, box-shadow 0.2s ease",
+          }}
+        >
+          <div style={{ aspectRatio: "9 / 16", background: "#020617" }}>
+            {item.thumbnailUrl ? (
+              <img
+                src={item.thumbnailUrl}
+                alt={item.title || item.originalFilename || "Video thumbnail"}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            ) : (
+              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(180deg,#1e293b,#0f172a)" }}>
+                <div style={{ textAlign: "center", color: "#e2e8f0", padding: 16 }}>
+                  <div style={{ fontSize: 34, marginBottom: 10 }}>▶</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.3 }}>Preview unavailable</div>
+                  <div style={{ fontSize: 11, marginTop: 6, color: "#94a3b8" }}>Open to play this video</div>
+                </div>
               </div>
+            )}
+          </div>
+          <div style={{ padding: 14, background: "linear-gradient(180deg,#fff, #f8fafc)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
+              <strong style={{ fontSize: 14, color: "#0f172a", lineHeight: 1.3 }}>{item.title}</strong>
+              <span style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>{formatDate(item.createdAt)}</span>
             </div>
-          )}
-        </div>
-        <div style={{ padding: 14, background: "linear-gradient(180deg,#fff, #f8fafc)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
-            <strong style={{ fontSize: 14, color: "#0f172a", lineHeight: 1.3 }}>{item.title}</strong>
-            <span style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>{formatDate(item.createdAt)}</span>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-            {item.location && (
-              <span style={badgeStyle("#eff6ff", "#2563eb")}>📍 {item.location}</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {item.location && (
+                <span style={badgeStyle("#eff6ff", "#2563eb")}>📍 {item.location}</span>
+              )}
+              {item.style && (
+                <span style={badgeStyle("#f5f3ff", "#7c3aed")}>{item.style}</span>
+              )}
+            </div>
+            {item.caption && (
+              <p style={{ margin: 0, fontSize: 12, color: "#475569", lineHeight: 1.5 }}>
+                {item.caption}
+              </p>
             )}
-            {item.style && (
-              <span style={badgeStyle("#f5f3ff", "#7c3aed")}>{item.style}</span>
-            )}
           </div>
-          {item.caption && (
-            <p style={{ margin: 0, fontSize: 12, color: "#475569", lineHeight: 1.5 }}>
-              {item.caption}
-            </p>
-          )}
         </div>
-      </div>
-    </button>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (window.confirm(`Delete "${item.title}"? This action cannot be undone.`)) {
+            onDelete(item);
+          }
+        }}
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          width: 32,
+          height: 32,
+          borderRadius: "50%",
+          border: "none",
+          background: "rgba(239, 68, 68, 0.9)",
+          color: "#fff",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 14,
+          fontWeight: "bold",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          zIndex: 10,
+        }}
+        title="Delete video"
+      >
+        ×
+      </button>
+    </div>
   );
 }
 
@@ -211,7 +258,7 @@ export default function Gallery() {
         },
         body: file,
       });
-      const data = await response.json();
+      const data = await readJsonSafe(response);
       if (!data?.success) {
         throw new Error(data?.error || "Upload failed");
       }
@@ -229,6 +276,29 @@ export default function Gallery() {
       setUploadError(error.message || "Upload failed");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDelete = async (item) => {
+    try {
+      const response = await fetch(GALLERY_URL, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: item.id }),
+      });
+      const data = await readJsonSafe(response);
+      if (data?.success) {
+        await fetchGallery();
+        if (selected && selected.id === item.id) {
+          setSelected(null);
+        }
+      } else {
+        alert("Failed to delete video: " + (data?.error || "Unknown error"));
+      }
+    } catch (error) {
+      alert("Failed to delete video: " + error.message);
     }
   };
 
@@ -456,7 +526,7 @@ export default function Gallery() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 18 }}>
               {filteredItems.map((item) => (
-                <VideoCard key={item.id || item.filename} item={item} onOpen={setSelected} />
+                <VideoCard key={item.id || item.filename} item={item} onOpen={setSelected} onDelete={handleDelete} />
               ))}
             </div>
           )}

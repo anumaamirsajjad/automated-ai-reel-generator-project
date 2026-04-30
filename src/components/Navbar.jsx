@@ -7,7 +7,6 @@ export default function Navbar({ generationStatus = "idle" }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const NAV = [
-    { name: "Welcome", path: "/", icon: "🏠" },
     { name: "Create", path: "/create", icon: "+" },
     { name: "Gallery", path: "/gallery", icon: "🗂" },
     { name: "Templates", path: "/templates", icon: "▶" },
@@ -89,26 +88,6 @@ export default function Navbar({ generationStatus = "idle" }) {
               Rendering...
             </span>
           )}
-          <Link
-            to="/create"
-            style={{
-              padding: "10px 20px",
-              border: "none",
-              borderRadius: 10,
-              background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              textDecoration: "none",
-              boxShadow: "0 4px 12px rgba(124,58,237,0.35)",
-            }}
-          >
-            + Quick Create
-          </Link>
           {user && (
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ color: "#374151", fontSize: "14px" }}>

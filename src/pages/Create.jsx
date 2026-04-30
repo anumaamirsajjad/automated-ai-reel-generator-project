@@ -160,6 +160,9 @@ export default function Create() {
   const [loadingStep, setLoadingStep] = useState(0);
   const [showQuickTips, setShowQuickTips] = useState(true);
   const [focusPromptOnCreate, setFocusPromptOnCreate] = useState(true);
+  const [captions, setCaptions] = useState(false);
+  const [hashtags, setHashtags] = useState(false);
+  const [music, setMusic] = useState(false);
   const promptRef = useRef(null);
 
   const artStyle = useCustomArtStyle && customArtStyle.trim() ? customArtStyle.trim() : selectedArtStyle;
@@ -238,6 +241,66 @@ export default function Create() {
       promptRef.current.focus();
     }
   }, [focusPromptOnCreate]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("selectedTemplateDraft");
+    if (!raw) return;
+
+    try {
+      const draft = JSON.parse(raw);
+
+      if (typeof draft.prompt === "string") setPrompt(draft.prompt);
+
+      if (typeof draft.artStyle === "string" && draft.artStyle.trim()) {
+        const styleValue = draft.artStyle.trim();
+        const presetNames = ART_STYLES.map((item) => item.name);
+        if (presetNames.includes(styleValue)) {
+          setSelectedArtStyle(styleValue);
+          setUseCustomArtStyle(false);
+          setCustomArtStyle("");
+        } else {
+          setUseCustomArtStyle(true);
+          setCustomArtStyle(styleValue);
+          setSelectedArtStyle("");
+        }
+      }
+
+      if (typeof draft.scene === "string" && draft.scene.trim()) {
+        const sceneValue = draft.scene.trim();
+        if (SCENES.includes(sceneValue)) {
+          setSelectedScene(sceneValue);
+          setUseCustomScene(false);
+          setCustomScene("");
+        } else {
+          setUseCustomScene(true);
+          setCustomScene(sceneValue);
+          setSelectedScene("");
+        }
+      }
+
+      if (["5 seconds", "10 seconds", "15 seconds"].includes(draft.duration)) {
+        setDuration(draft.duration);
+      }
+      if (["High (1080p)", "Medium (720p)", "Low (480p)"].includes(draft.quality)) {
+        setQuality(draft.quality);
+      }
+      if (["9:16 (Vertical)", "16:9 (Horizontal)", "1:1 (Square)"].includes(draft.ratio)) {
+        setRatio(draft.ratio);
+      }
+      if (Number.isFinite(Number(draft.speed))) {
+        const clampedSpeed = Math.max(0, Math.min(100, Number(draft.speed)));
+        setSpeed(clampedSpeed);
+      }
+
+      if (typeof draft.autoCaptions === "boolean") setCaptions(draft.autoCaptions);
+      if (typeof draft.autoHashtags === "boolean") setHashtags(draft.autoHashtags);
+      if (typeof draft.bgMusic === "boolean") setMusic(draft.bgMusic);
+    } catch {
+      // Ignore malformed template drafts.
+    } finally {
+      localStorage.removeItem("selectedTemplateDraft");
+    }
+  }, []);
 
   const handlePickArtStyle = (style) => {
     setSelectedArtStyle(style);

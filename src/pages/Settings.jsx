@@ -1,490 +1,368 @@
 import { useState, useEffect } from "react";
 import { buildApiUrl } from "../lib/api";
-
-function Toggle({ on, onChange, disabled = false }) {
-  return (
-    <div
-      onClick={() => {
-        if (!disabled) onChange(!on);
-      }}
-      style={{
-        width: 44, height: 24, borderRadius: 12, cursor: "pointer",
-        background: disabled ? "#e5e7eb" : on ? "#1a1a2e" : "#d1d5db",
-        position: "relative", transition: "background 0.2s", flexShrink: 0,
-        opacity: disabled ? 0.6 : 1,
-      }}
-    >
-      <div style={{
-        position: "absolute", top: 3, left: on ? 23 : 3,
-        width: 18, height: 18, borderRadius: "50%", background: "#fff",
-        transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
-      }} />
-    </div>
-  );
-}
-
-function SelectInput({ value, options, onChange }) {
-  return (
-    <div style={{ position: "relative" }}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: "100%", padding: "12px 16px", appearance: "none",
-          background: "#fefce8", border: "1px solid #e5e7eb", borderRadius: 8,
-          fontSize: 14, color: "#1a1a2e", cursor: "pointer",
-          outline: "none", fontFamily: "inherit",
-        }}
-      >
-        {options.map((o) => <option key={o}>{o}</option>)}
-      </select>
-      <div style={{
-        position: "absolute", right: 14, top: "50%",
-        transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280",
-      }}>▾</div>
-    </div>
-  );
-}
-
-function Section({ title, desc, children }) {
-  return (
-    <div style={{
-      background: "#fff", borderRadius: 16, padding: 28,
-      boxShadow: "0 1px 8px rgba(0,0,0,0.06)", marginBottom: 20,
-    }}>
-      <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#1a1a2e" }}>{title}</h2>
-      <p style={{ margin: "0 0 24px", fontSize: 13, color: "#9ca3af" }}>{desc}</p>
-      {children}
-    </div>
-  );
-}
-
-function ToggleRow({ label, desc, on, onChange, disabled = false }) {
-  return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "16px 0", borderBottom: "1px solid #f3f4f6",
-    }}>
-      <div>
-        <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#1a1a2e" }}>{label}</p>
-        {desc && <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{desc}</p>}
-      </div>
-      <Toggle on={on} onChange={onChange} disabled={disabled} />
-    </div>
-  );
-}
-
-
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Settings() {
-  const [reminderTime,  setReminderTime]  = useState("09:00");
-  const [reminderEnabled, setReminderEnabled] = useState(true);
-  const [reminderFrequency, setReminderFrequency] = useState("daily");
-  const [selectedDates, setSelectedDates] = useState([]); // YYYY-MM-DD strings
-  const [selectedDays, setSelectedDays] = useState([]); // 0-6 numbers (Sun=0)
-
-  const [artStyle,      setArtStyle]      = useState("Realistic");
-  const [duration,      setDuration]      = useState("10 seconds");
-  const [quality,       setQuality]       = useState("High (1080p)");
-  const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useState(true);
-
-  const [showQuickTips,       setShowQuickTips]       = useState(true);
-  const [focusPromptOnCreate, setFocusPromptOnCreate] = useState(true);
-
-  const [saved,         setSaved]         = useState(false);
+  const { user, login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [initialProfile, setInitialProfile] = useState({ email: "", username: "" });
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
-  const [initialSnapshot, setInitialSnapshot] = useState(null);
-  const [notificationPermission, setNotificationPermission] = useState(
-    typeof Notification !== "undefined" ? Notification.permission : "denied"
-  );
+  const [message, setMessage] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editingField, setEditingField] = useState(null); // 'email'|'username'|'avatar'|'password'
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
-  const buildSettingsPayload = () => ({
-    reminderTime,
-    reminderEnabled,
-    reminderFrequency,
-    selectedDates,
-    selectedDays,
-    artStyle,
-    duration,
-    quality,
-    desktopNotificationsEnabled,
-    showQuickTips,
-    focusPromptOnCreate,
-  });
-
-  const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== JSON.stringify(buildSettingsPayload());
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const response = await fetch(buildApiUrl("/api/settings"));
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const settings = data.settings || {};
-        if (typeof settings.reminderTime === "string") setReminderTime(settings.reminderTime);
-        if (typeof settings.reminderEnabled === "boolean") setReminderEnabled(settings.reminderEnabled);
-        if (typeof settings.reminderFrequency === "string") setReminderFrequency(settings.reminderFrequency);
-        if (Array.isArray(settings.selectedDates)) setSelectedDates(settings.selectedDates);
-        if (Array.isArray(settings.selectedDays)) setSelectedDays(settings.selectedDays);
-        if (typeof settings.artStyle === "string") setArtStyle(settings.artStyle);
-        if (typeof settings.duration === "string") setDuration(settings.duration);
-        if (typeof settings.quality === "string") setQuality(settings.quality);
-        if (typeof settings.desktopNotificationsEnabled === "boolean") setDesktopNotificationsEnabled(settings.desktopNotificationsEnabled);
-        if (typeof settings.showQuickTips === "boolean") setShowQuickTips(settings.showQuickTips);
-        if (typeof settings.focusPromptOnCreate === "boolean") setFocusPromptOnCreate(settings.focusPromptOnCreate);
-
-        const snapshot = {
-          reminderTime: typeof settings.reminderTime === "string" ? settings.reminderTime : "09:00",
-          reminderEnabled: typeof settings.reminderEnabled === "boolean" ? settings.reminderEnabled : true,
-          reminderFrequency: typeof settings.reminderFrequency === "string" ? settings.reminderFrequency : "daily",
-          selectedDates: Array.isArray(settings.selectedDates) ? settings.selectedDates : [],
-          selectedDays: Array.isArray(settings.selectedDays) ? settings.selectedDays : [],
-          artStyle: typeof settings.artStyle === "string" ? settings.artStyle : "Realistic",
-          duration: typeof settings.duration === "string" ? settings.duration : "10 seconds",
-          quality: typeof settings.quality === "string" ? settings.quality : "High (1080p)",
-          desktopNotificationsEnabled: typeof settings.desktopNotificationsEnabled === "boolean" ? settings.desktopNotificationsEnabled : true,
-          showQuickTips: typeof settings.showQuickTips === "boolean" ? settings.showQuickTips : true,
-          focusPromptOnCreate: typeof settings.focusPromptOnCreate === "boolean" ? settings.focusPromptOnCreate : true,
-        };
-        setInitialSnapshot(JSON.stringify(snapshot));
-      } catch {
-        // Keep defaults if the backend is unavailable.
-        setInitialSnapshot(JSON.stringify(buildSettingsPayload()));
-      }
-    };
-
-    loadSettings();
-  }, []);
-
-  useEffect(() => {
-    if (typeof Notification !== "undefined") {
-      setNotificationPermission(Notification.permission);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!reminderEnabled && desktopNotificationsEnabled) {
-      setDesktopNotificationsEnabled(false);
-    }
-  }, [reminderEnabled, desktopNotificationsEnabled]);
-
-  const requestNotificationPermission = async () => {
-    if (typeof Notification === "undefined") return;
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-    } catch {
-      setNotificationPermission("denied");
-    }
+  const resolveMediaUrl = (url) => {
+    if (!url) return null;
+    if (/^https?:\/\//i.test(url)) return url;
+    return buildApiUrl(url);
   };
 
-  const handleSave = () => {
-    if (!hasUnsavedChanges || saving) return;
+  useEffect(() => {
+    const loadProfile = async () => {
+      const token = localStorage.getItem("authToken");
+      const localUser = user || JSON.parse(localStorage.getItem("user") || "null") || {};
 
-    const saveSettings = async () => {
-      const payload = buildSettingsPayload();
+      // Show known local values immediately so Settings never looks empty.
+      setEmail(localUser.email || "");
+      setUsername(localUser.username || "");
+      setInitialProfile({
+        email: localUser.email || "",
+        username: localUser.username || "",
+        profilePicture: localUser.profilePicture || null,
+      });
+      setAvatarPreview(resolveMediaUrl(localUser.profilePicture || null));
+
+      if (!token) {
+        setLoadingProfile(false);
+        return;
+      }
 
       try {
-        setSaving(true);
+        const res = await fetch(buildApiUrl("/api/user"), {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          setMessage({ type: "error", text: "Could not refresh profile from server." });
+          return;
+        }
+        const data = await res.json();
+        const u = data.user || {};
+        setEmail(u.email || "");
+        setUsername(u.username || "");
+        setInitialProfile({ email: u.email || "", username: u.username || "", profilePicture: u.profilePicture || null });
+        setAvatarPreview(resolveMediaUrl(u.profilePicture || null));
+      } catch (err) {
+        setMessage({ type: "error", text: "Unable to load profile. Check backend connection." });
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+    loadProfile();
+  }, [user]);
 
-        const response = await fetch(buildApiUrl("/api/settings"), {
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setMessage(null);
+    setSaving(true);
+
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      setMessage({ type: "error", text: "Not authenticated" });
+      setSaving(false);
+      return;
+    }
+
+    try {
+      // Update profile
+      const profileRes = await fetch(buildApiUrl("/api/user"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: email.trim(), username: username.trim() }),
+      });
+
+      const profileJson = await profileRes.json().catch(() => ({}));
+      if (!profileRes.ok) {
+        setMessage({ type: "error", text: profileJson.error || profileJson.message || "Failed to update profile" });
+        setSaving(false);
+        return;
+      }
+
+      // If password change requested
+      if (newPassword) {
+        if (newPassword !== confirmPassword) {
+          setMessage({ type: "error", text: "New password and confirmation do not match" });
+          setSaving(false);
+          return;
+        }
+
+        const pwRes = await fetch(buildApiUrl("/api/user/password"), {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ currentPassword: currentPassword, newPassword: newPassword }),
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to save settings");
+        const pwJson = await pwRes.json().catch(() => ({}));
+        if (!pwRes.ok) {
+          setMessage({ type: "error", text: pwJson.error || pwJson.message || "Failed to change password" });
+          setSaving(false);
+          return;
         }
-
-        window.dispatchEvent(new CustomEvent("settings-updated", { detail: payload }));
-
-        setSaved(true);
-        setInitialSnapshot(JSON.stringify(payload));
-        setTimeout(() => setSaved(false), 2000);
-      } catch {
-        setSaved(false);
-      } finally {
-        setSaving(false);
       }
-    };
 
-    saveSettings();
-  };
-
-  useEffect(() => {
-    const fetchSettings = async () => {
+      // Update auth context & localStorage user snapshot
+      const updatedUser = profileJson.user || { username, email };
+      const existingToken = localStorage.getItem("authToken");
       try {
-        const response = await fetch(buildApiUrl("/api/settings"));
-        if (response.ok) {
-          const data = await response.json();
-          setReminderTime(data.reminderTime || "09:00");
-          setReminderEnabled(data.reminderEnabled || false);
-          setReminderFrequency(data.reminderFrequency || "daily");
-          setArtStyle(data.artStyle || "Realistic");
-          setDuration(data.duration || "10 seconds");
-          setQuality(data.quality || "High (1080p)");
-          setShowQuickTips(data.showQuickTips || true);
-          setFocusPromptOnCreate(data.focusPromptOnCreate || true);
-        }
-      } catch (error) {
-        console.error("Failed to fetch settings:", error);
+        login(updatedUser, existingToken);
+      } catch {
+        // fallback: update localStorage manually
+        localStorage.setItem("user", JSON.stringify(updatedUser));
       }
-    };
 
-    fetchSettings();
-  }, []);
-
-  const saveSettings = async (updatedSettings) => {
-    try {
-      setSaving(true);
-      const response = await fetch(buildApiUrl("/api/settings"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedSettings),
-      });
-      if (response.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-      }
-    } catch (error) {
-      console.error("Failed to save settings:", error);
+      setMessage({ type: "success", text: "Profile saved" });
+      const newPic = profileJson && profileJson.user && profileJson.user.profilePicture ? profileJson.user.profilePicture : initialProfile.profilePicture;
+      setInitialProfile({ email: updatedUser.email || email, username: updatedUser.username || username, profilePicture: newPic });
+      setAvatarPreview(resolveMediaUrl(newPic || avatarPreview));
+      setEditing(false);
+      setEditingField(null);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setMessage({ type: "error", text: "Unexpected error" });
     } finally {
       setSaving(false);
     }
   };
 
+  const handleEdit = () => {
+    setEditing(true);
+    setMessage(null);
+  };
+
+  const handleCancel = () => {
+    setEmail(initialProfile.email || "");
+    setUsername(initialProfile.username || "");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setMessage(null);
+    setEditing(false);
+    setEditingField(null);
+  };
+
+  const handleStartEditField = (field) => {
+    setEditing(true);
+    setEditingField(field);
+    setMessage(null);
+  };
+
+  const passwordStrength = (pw) => {
+    if (!pw) return { score: 0, label: 'Too short' };
+    let score = 0;
+    if (pw.length >= 8) score += 1;
+    if (/[0-9]/.test(pw)) score += 1;
+    if (/[A-Z]/.test(pw)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pw)) score += 1;
+    const labels = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
+    return { score, label: labels[Math.min(score, labels.length - 1)] };
+  };
+
   return (
-    <div style={{ padding: "32px", maxWidth: 900, margin: "0 auto", animation: "fadeUp 0.4s ease" }}>
-      <style>{`@keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }`}</style>
+    <div style={{ padding: 28, maxWidth: 720, margin: "0 auto" }}>
+      <h1 style={{ margin: 0, fontSize: 26 }}>Profile</h1>
+      <p style={{ color: "#6b7280", marginTop: 6 }}>Edit your email, name, and password.</p>
 
-      <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, color: "#1a1a2e" }}>Settings</h1>
-      <p style={{ margin: "0 0 28px", color: "#6b7280", fontSize: 14 }}>
-        Manage your account and integration preferences
-      </p>
-
-      {/* Instagram account feature removed */}
-
-      {/* ── Set a Reminder to Post ── */}
-      <Section
-        title="Set a Reminder to Post"
-        desc="Get reminded when it's time to post your reels"
-      >
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Reminder Time
-          </label>
-          <input
-            type="time"
-            value={reminderTime}
-            onChange={(e) => setReminderTime(e.target.value)}
-            style={{
-              width: "100%", padding: "12px 16px",
-              background: "#fefce8", border: "1px solid #e5e7eb",
-              borderRadius: 8, fontSize: 13, fontFamily: "inherit",
-              outline: "none", boxSizing: "border-box",
-            }}
-          />
-          <p style={{ margin: "8px 0 0", fontSize: 12, color: "#9ca3af" }}>
-            You'll receive a reminder at the selected time according to the schedule below.
-          </p>
+      {loadingProfile && (
+        <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#eff6ff", color: "#1d4ed8" }}>
+          Loading profile...
         </div>
+      )}
 
-        <ToggleRow
-          label="Desktop Notifications"
-          desc="Turn reminder popups on or off"
-          on={desktopNotificationsEnabled}
-          onChange={(next) => {
-            setDesktopNotificationsEnabled(next);
-            if (next && notificationPermission === "default") {
-              requestNotificationPermission();
-            }
+      {message && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 10,
+            borderRadius: 8,
+            background: message.type === "error" ? "#fee2e2" : "#ecfdf5",
+            color: message.type === "error" ? "#991b1b" : "#065f46",
+            border: message.type === "error" ? "1px solid #fecaca" : "1px solid #a7f3d0",
           }}
-          disabled={!reminderEnabled}
-        />
-        {reminderEnabled && desktopNotificationsEnabled && (
-          <div style={{ margin: "8px 0 12px", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fafafa" }}>
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: "#4b5563" }}>
-              Browser permission: <strong>{notificationPermission}</strong>
-            </p>
-            {notificationPermission !== "granted" && (
-              <button
-                onClick={requestNotificationPermission}
-                style={{
-                  padding: "7px 10px",
-                  border: "none",
-                  borderRadius: 8,
-                  background: "#7c3aed",
-                  color: "#fff",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Enable Browser Notifications
-              </button>
+        >
+          {message.text}
+        </div>
+      )}
+
+      <div style={{ marginTop: 20, display: 'grid', gap: 12 }}>
+        {/* Avatar */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ width: 88, height: 88, borderRadius: 12, overflow: 'hidden', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ fontSize: 28 }}>🙂</div>
             )}
           </div>
-        )}
-
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Frequency
-          </label>
-          <select
-            value={reminderFrequency}
-            onChange={(e) => setReminderFrequency(e.target.value)}
-            style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff" }}
-          >
-            <option value="daily">Daily</option>
-            <option value="specific-dates">Specific dates</option>
-            <option value="specific-days">Specific days of week</option>
-          </select>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Profile Picture</div>
+            <div style={{ marginTop: 6 }}>
+              <button type="button" onClick={() => handleStartEditField('avatar')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Edit</button>
+            </div>
+          </div>
         </div>
 
-        {reminderFrequency === "specific-dates" && (
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-              Add Date
-            </label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input type="date" id="reminder-date-input" style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb" }} />
-              <button
-                onClick={() => {
-                  const el = document.getElementById("reminder-date-input");
-                  if (!el || !el.value) return;
-                  if (!selectedDates.includes(el.value)) setSelectedDates([...selectedDates, el.value]);
-                  el.value = "";
-                }}
-                style={{ padding: "8px 12px", borderRadius: 8, background: "#7c3aed", color: "#fff", border: "none" }}
-              >Add</button>
+        {/* Email */}
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Gmail</div>
+            <div style={{ fontSize: 14, color: '#111827', marginTop: 6 }}>{initialProfile.email || email || '—'}</div>
+          </div>
+          <div>
+            <button type="button" onClick={() => handleStartEditField('email')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Edit</button>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Name</div>
+            <div style={{ fontSize: 14, color: '#111827', marginTop: 6 }}>{initialProfile.username || username || '—'}</div>
+          </div>
+          <div>
+            <button type="button" onClick={() => handleStartEditField('username')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Edit</button>
+          </div>
+        </div>
+
+        {/* Password */}
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Password</div>
+            <div style={{ fontSize: 14, color: '#111827', marginTop: 6 }}>********</div>
+          </div>
+          <div>
+            <button type="button" onClick={() => handleStartEditField('password')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Change Password</button>
+          </div>
+        </div>
+
+        {/* Editing panels */}
+            {editingField === 'avatar' && (
+              <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
+                <label style={{ fontSize: 13, color: '#374151' }}>Upload Profile Picture</label>
+                <input type="file" accept="image/*" onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const url = URL.createObjectURL(f);
+                  setAvatarPreview(url);
+                  setAvatarFile(f);
+                  setMessage(null);
+                }} style={{ marginTop: 8 }} />
+                {avatarPreview && (
+                  <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div style={{ width: 88, height: 88, borderRadius: 8, overflow: 'hidden', background: '#f3f4f6' }}>
+                      <img src={avatarPreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(resolveMediaUrl(initialProfile.profilePicture || null)); setEditingField(null); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
+                      <button type="button" onClick={async () => {
+                        if (!avatarFile) { setMessage({ type: 'error', text: 'Select an image first' }); return; }
+                        const token = localStorage.getItem('authToken');
+                        if (!token) { setMessage({ type: 'error', text: 'Not authenticated' }); return; }
+                        const form = new FormData(); form.append('file', avatarFile, avatarFile.name);
+                        setSaving(true); setMessage(null);
+                        try {
+                          const res = await fetch(buildApiUrl('/api/user/avatar'), { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+                          const j = await res.json().catch(()=>({}));
+                          if (!res.ok) { setMessage({ type: 'error', text: j.error || 'Upload failed' }); return; }
+                          const pic = j.profilePicture;
+                          setAvatarPreview(resolveMediaUrl(pic));
+                          const existingToken = localStorage.getItem('authToken');
+                          const curUser = JSON.parse(localStorage.getItem('user') || '{}');
+                          const updatedUser = { ...curUser, profilePicture: pic };
+                          try { login(updatedUser, existingToken); } catch { localStorage.setItem('user', JSON.stringify(updatedUser)); }
+                          setInitialProfile(prev => ({ ...prev, profilePicture: pic }));
+                          setMessage({ type: 'success', text: 'Avatar uploaded' });
+                          setAvatarFile(null);
+                          setEditingField(null);
+                        } catch (err) { setMessage({ type: 'error', text: 'Upload failed' }); }
+                        finally { setSaving(false); }
+                      }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }}>Upload</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+        {editingField === 'email' && (
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
+            <label style={{ fontSize: 13, color: '#374151' }}>Gmail (email)</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
+              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
             </div>
-            <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {selectedDates.map((d, i) => (
-                <div key={d} style={{ background: "#f3f4f6", padding: "6px 10px", borderRadius: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13 }}>{d}</span>
-                  <button onClick={() => setSelectedDates(selectedDates.filter((_, idx) => idx !== i))} style={{ border: "none", background: "transparent", cursor: "pointer" }}>✕</button>
+          </div>
+        )}
+
+        {editingField === 'username' && (
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
+            <label style={{ fontSize: 13, color: '#374151' }}>Name</label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
+              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        )}
+
+        {editingField === 'password' && (
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
+            <label style={{ fontSize: 13, color: '#374151' }}>Current Password</label>
+            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
+            <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 13, color: '#374151' }}>New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8, width: '100%' }} />
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>Minimum 6 characters. Use mixed case, numbers, symbols for stronger password.</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 13, color: '#374151' }}>Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8, width: '100%' }} />
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 13, color: '#374151' }}>Strength: <span style={{ fontWeight: 600 }}>{passwordStrength(newPassword).label}</span></div>
                 </div>
-              ))}
+              </div>
+            </div>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
+              <button type="button" onClick={async (e) => {
+                  e.preventDefault();
+                  const token = localStorage.getItem('authToken');
+                  if (!token) { setMessage({ type: 'error', text: 'Not authenticated' }); return; }
+                  if (!currentPassword || !newPassword) { setMessage({ type: 'error', text: 'Fill passwords' }); return; }
+                  if (newPassword !== confirmPassword) { setMessage({ type: 'error', text: 'Passwords do not match' }); return; }
+                  if (newPassword.length < 6) { setMessage({ type: 'error', text: 'New password must be at least 6 characters' }); return; }
+                  setSaving(true);
+                  try {
+                    const res = await fetch(buildApiUrl('/api/user/password'), { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ currentPassword, newPassword }) });
+                    const j = await res.json().catch(()=>({}));
+                    if (!res.ok) { setMessage({ type: 'error', text: j.error || 'Failed to change password' }); return; }
+                    setMessage({ type: 'success', text: 'Password changed' });
+                    setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setEditingField(null);
+                  } catch (err) { setMessage({ type: 'error', text: 'Unexpected error' }); }
+                  finally { setSaving(false); }
+              }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }} disabled={saving}>Change</button>
             </div>
           </div>
         )}
-
-        {reminderFrequency === "specific-days" && (
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-              Select Days
-            </label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, idx) => {
-                const active = selectedDays.includes(idx);
-                return (
-                  <button key={d} onClick={() => {
-                    if (active) setSelectedDays(selectedDays.filter(sd => sd !== idx)); else setSelectedDays([...selectedDays, idx]);
-                  }}
-                    style={{
-                      padding: "8px 12px", borderRadius: 8, border: active ? '1px solid #7c3aed' : '1px solid #e5e7eb',
-                      background: active ? '#f5dfff' : '#fff', cursor: 'pointer'
-                    }}>{d}</button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginBottom: 12 }}>
-          <ToggleRow label="Enable Reminder" desc="Turn the reminder on or off" on={reminderEnabled} onChange={setReminderEnabled} />
-        </div>
-        {reminderEnabled && (
-          <div style={{
-            background: "#f0fdf4", border: "1px solid #dcfce7",
-            borderRadius: 10, padding: "12px 16px",
-            display: "flex", alignItems: "flex-start", gap: 10,
-          }}>
-            <span style={{ color: "#15803d", fontSize: 16, flexShrink: 0 }}>🔔</span>
-            <div style={{ margin: 0, fontSize: 13, color: "#166534" }}>
-              <div>Reminder time: <strong>{reminderTime}</strong></div>
-              {reminderFrequency === 'daily' && <div>Frequency: <strong>Daily</strong></div>}
-              {reminderFrequency === 'specific-dates' && <div>Dates: <strong>{selectedDates.length ? selectedDates.join(', ') : 'No dates set'}</strong></div>}
-              {reminderFrequency === 'specific-days' && <div>Days: <strong>{selectedDays.length ? selectedDays.map(i => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][i]).join(', ') : 'No days selected'}</strong></div>}
-            </div>
-          </div>
-        )}
-      </Section>
-
-      {/* ── Generation Settings ── */}
-      <Section
-        title="Generation Settings"
-        desc="Customize default generation parameters"
-      >
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Default Art Style
-          </label>
-          <SelectInput
-            value={artStyle}
-            options={["Realistic", "Anime", "Fantasy Art", "Cyberpunk", "Watercolor", "Sketch"]}
-            onChange={setArtStyle}
-          />
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Default Video Duration
-          </label>
-          <SelectInput
-            value={duration}
-            options={["5 seconds", "10 seconds", "15 seconds"]}
-            onChange={setDuration}
-          />
-        </div>
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Video Quality
-          </label>
-          <SelectInput
-            value={quality}
-            options={["High (1080p)", "Medium (720p)", "Low (480p)"]}
-            onChange={setQuality}
-          />
-        </div>
-      </Section>
-
-      {/* ── Workspace Features ── */}
-      <Section
-        title="Workspace Features"
-        desc="Choose how the app behaves while you create"
-      >
-        <ToggleRow label="Show Quick Tips" desc="Display helper tips on the Create page" on={showQuickTips} onChange={setShowQuickTips} />
-        <ToggleRow label="Focus Prompt on Open" desc="Place the cursor in the prompt box when Create opens" on={focusPromptOnCreate} onChange={setFocusPromptOnCreate} />
-        <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 12, background: "#f8fafc", border: "1px solid #e5e7eb", color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
-          These settings are used by the Create page and saved with your generation defaults.
-        </div>
-      </Section>
-
-      {/* ── Save / Reset Buttons ── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
-        <button style={{
-          padding: "11px 24px", border: "1.5px solid #e5e7eb", borderRadius: 10,
-          background: "#fff", color: "#374151", fontWeight: 600,
-          fontSize: 14, cursor: "pointer", fontFamily: "inherit",
-        }}>Reset to Defaults</button>
-
-        <button
-          onClick={handleSave}
-          disabled={!hasUnsavedChanges || saving}
-          style={{
-            padding: "11px 24px", border: "none", borderRadius: 10,
-            background: saved
-              ? "linear-gradient(135deg,#22c55e,#16a34a)"
-              : "linear-gradient(135deg,#7c3aed,#6d28d9)",
-            color: "#fff", fontWeight: 700, fontSize: 14,
-            cursor: !hasUnsavedChanges || saving ? "not-allowed" : "pointer",
-            opacity: !hasUnsavedChanges || saving ? 0.55 : 1,
-            display: "flex", alignItems: "center", gap: 8,
-            fontFamily: "inherit", transition: "background 0.3s",
-          }}
-        >{saved ? "✓ Saved!" : saving ? "Saving..." : "💾 Save Changes"}</button>
       </div>
     </div>
   );

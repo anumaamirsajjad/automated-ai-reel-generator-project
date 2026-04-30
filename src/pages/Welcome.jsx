@@ -1,8 +1,20 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { buildApiUrl } from "../lib/api";
+import { API_BASE_URL, buildApiUrl } from "../lib/api";
 import bgImage from "./bg.png";
+
+async function readJsonSafe(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    message: text.slice(0, 180) || `Request failed with status ${response.status}`,
+  };
+}
 
 export default function Welcome() {
   const [formData, setFormData] = useState({
@@ -60,7 +72,7 @@ export default function Welcome() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const data = await readJsonSafe(response);
 
       if (response.ok) {
         // Store auth token/session
@@ -71,7 +83,10 @@ export default function Welcome() {
       }
     } catch (error) {
       console.error("Authentication error:", error);
-      setError("Network error. Please try again.");
+      const hint = API_BASE_URL
+        ? `Cannot reach API at ${API_BASE_URL}.`
+        : "Cannot reach backend at http://localhost:5000.";
+      setError(`Network error. ${hint} Ensure the backend server is running.`);
     } finally {
       setIsLoading(false);
     }

@@ -1,18 +1,114 @@
 {
-  "reminderTime": "09:00",
-  "reminderEnabled": false,
-  "reminderFrequency": "daily",
-  "selectedDates": [
-    "2026-04-30"
-  ],
-  "selectedDays": [],
+  "version": 2,
+  "profile": {
+    "displayName": "",
+    "username": "",
+    "email": "",
+    "bio": "",
+    "niche": "",
+    "creatorType": "Individual",
+    "timezone": "Asia/Kolkata",
+    "language": "English"
+  },
+  "brandKit": {
+    "brandName": "",
+    "primaryColor": "#7c3aed",
+    "secondaryColor": "#2563eb",
+    "accentColor": "#0ea5e9",
+    "watermarkEnabled": false,
+    "watermarkPosition": "bottom-right",
+    "watermarkOpacity": 0.65,
+    "outroText": "Follow for more",
+    "defaultCTA": "Save and share this reel"
+  },
+  "generationDefaults": {
+    "artStyle": "Realistic",
+    "theme": "Sunset Beach",
+    "duration": "10 seconds",
+    "quality": "High (1080p)",
+    "aspectRatio": "9:16 (Vertical)",
+    "speed": 50,
+    "autoCaptions": true,
+    "autoHashtags": true,
+    "bgMusic": true,
+    "showQuickTips": true,
+    "focusPromptOnCreate": true
+  },
+  "platformPresets": {
+    "instagram": {
+      "enabled": true,
+      "maxDuration": 90,
+      "captionStyle": "Short + hooks",
+      "defaultAspectRatio": "9:16 (Vertical)"
+    },
+    "tiktok": {
+      "enabled": true,
+      "maxDuration": 60,
+      "captionStyle": "Trendy + punchy",
+      "defaultAspectRatio": "9:16 (Vertical)"
+    },
+    "youtubeShorts": {
+      "enabled": true,
+      "maxDuration": 60,
+      "captionStyle": "Keyword rich",
+      "defaultAspectRatio": "9:16 (Vertical)"
+    }
+  },
+  "publishingAutomation": {
+    "reminderTime": "09:00",
+    "reminderEnabled": true,
+    "reminderFrequency": "daily",
+    "selectedDates": [],
+    "selectedDays": [],
+    "desktopNotificationsEnabled": true,
+    "autoScheduleEnabled": false,
+    "postingFrequency": "daily"
+  },
+  "mediaStorage": {
+    "autoThumbnailSecond": 1.0,
+    "autoCleanupEnabled": false,
+    "keepGeneratedDays": 30,
+    "keepTempDays": 7,
+    "storageWarningGB": 5
+  },
+  "security": {
+    "twoFactorEnabled": false,
+    "loginAlertsEnabled": true
+  },
+  "notifications": {
+    "inAppEnabled": true,
+    "emailEnabled": false,
+    "desktopEnabled": true,
+    "reelCompleteAlert": true,
+    "reelFailedAlert": true,
+    "storageAlert": true,
+    "weeklyDigestEnabled": false
+  },
+  "integrations": {
+    "instagramConnected": false,
+    "tiktokConnected": false,
+    "youtubeConnected": false,
+    "driveConnected": false,
+    "webhookUrl": ""
+  },
+  "advanced": {
+    "debugMode": false,
+    "apiTimeoutMs": 420000,
+    "maxConcurrentJobs": 2,
+    "experimentalFeaturesEnabled": false
+  },
   "artStyle": "Realistic",
   "duration": "10 seconds",
   "quality": "High (1080p)",
   "autoCaptions": true,
   "autoHashtags": true,
   "bgMusic": true,
-  "notifGen": true,
-  "notifSched": true,
-  "notifTemp": false
+  "showQuickTips": true,
+  "focusPromptOnCreate": true,
+  "reminderTime": "09:00",
+  "reminderEnabled": true,
+  "reminderFrequency": "daily",
+  "selectedDates": [],
+  "selectedDays": [],
+  "desktopNotificationsEnabled": true
 }
