@@ -1,4 +1,4 @@
-# Automated Reel Generator (Frontend + Backend)
+# Reelify (Frontend + Backend)
 
 This project now includes:
 

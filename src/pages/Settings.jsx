@@ -338,15 +338,15 @@ export default function Settings() {
           <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
             <label style={{ fontSize: 13, color: '#374151' }}>Current Password</label>
             <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
-            <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
-              <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+              <div>
                 <label style={{ fontSize: 13, color: '#374151' }}>New Password</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8, width: '100%' }} />
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
                 <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>Minimum 6 characters. Use mixed case, numbers, symbols for stronger password.</div>
               </div>
-              <div style={{ flex: 1 }}>
+              <div>
                 <label style={{ fontSize: 13, color: '#374151' }}>Confirm New Password</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8, width: '100%' }} />
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontSize: 13, color: '#374151' }}>Strength: <span style={{ fontWeight: 600 }}>{passwordStrength(newPassword).label}</span></div>
                 </div>

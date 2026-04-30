@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL, buildApiUrl } from "../lib/api";
 import bgImage from "./bg.png";
+import logo from "./logo.png";
 
 async function readJsonSafe(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -133,20 +134,18 @@ export default function Welcome() {
         position: "relative",
         zIndex: 1
       }}>
-        <div style={{
-          width: "80px",
-          height: "80px",
-          borderRadius: "20px",
-          background: "linear-gradient(135deg,#7c3aed,#a855f7)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "36px",
-          margin: "0 auto 20px",
-          boxShadow: "0 8px 32px rgba(124, 58, 237, 0.3)"
-        }}>
-          📹
-        </div>
+        <img
+          src={logo}
+          alt="Reelify Logo"
+          style={{
+            width: "80px",
+            height: "80px",
+            borderRadius: "20px",
+            margin: "0 auto 20px",
+            objectFit: "cover",
+            boxShadow: "0 8px 32px rgba(124, 58, 237, 0.3)"
+          }}
+        />
         <h1 style={{
           fontSize: "32px",
           fontWeight: "700",
@@ -154,7 +153,7 @@ export default function Welcome() {
           textShadow: "0 2px 4px rgba(0,0,0,0.1)",
           color: "#1a1a2e"
         }}>
-          Reel Generator
+          Reelify
         </h1>
         <p style={{
           fontSize: "16px",

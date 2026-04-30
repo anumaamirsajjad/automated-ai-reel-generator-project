@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import logo from "../pages/logo.png";
 
 export default function Navbar({ generationStatus = "idle" }) {
   const location = useLocation();
@@ -47,23 +48,19 @@ export default function Navbar({ generationStatus = "idle" }) {
       >
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
+          <img
+            src={logo}
+            alt="Reelify Logo"
             style={{
               width: 40,
               height: 40,
               borderRadius: 10,
-              background: "linear-gradient(135deg,#7c3aed,#a855f7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
+              objectFit: "cover",
             }}
-          >
-            📹
-          </div>
+          />
           <div>
             <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a2e" }}>
-              Reel Generator
+              Reelify
             </div>
             <div style={{ fontSize: 11, color: "#9ca3af" }}>
               AI-Powered Video Creation
