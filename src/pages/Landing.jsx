@@ -3,13 +3,15 @@ import { Link } from "react-router-dom";
 import logo from "./logo.png";
 
 export default function Landing() {
-  const leftBadges = ["⚡ AI Powered", "🎬 Instant Reels", "🔒 Secure Platform"];
-  const rightBadges = ["✨ No Experience Needed", "🚀 Fast Workflow", "🎨 Creative Tools"];
+  const leftBadges = ["AI Powered", "Instant Reels", "Secure Platform"];
+  const rightBadges = ["No Experience Needed", "Fast Workflow", "Creative Tools"];
 
   return (
     <div
       style={{
-        minHeight: "calc(100vh - 32px)",
+        height: "110vh",
+        margin: 0,
+        padding: 0,
         background: "linear-gradient(135deg, #1DB5E6 0%, #2563EB 50%, #1E3A8A 100%)",
         display: "flex",
         alignItems: "center",
@@ -183,9 +185,9 @@ export default function Landing() {
           }}
         >
           {[
-            { icon: "✨", label: "AI-Powered" },
-            { icon: "⚡", label: "Lightning Fast" },
-            { icon: "🎨", label: "Creative Tools" },
+            { label: "AI-Powered" },
+            { label: "Lightning Fast" },
+            { label: "Creative Tools" },
           ].map((feature, idx) => (
             <div
               key={idx}
@@ -246,9 +248,7 @@ export default function Landing() {
       <style>{`
         .landing-side-column {
           width: 210px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
+          display: none;
         }
 
         .landing-side-badge {
