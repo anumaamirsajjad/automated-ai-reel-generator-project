@@ -56,8 +56,9 @@ function VideoCard({ item, onOpen, onDelete }) {
           style={{
             borderRadius: 18,
             overflow: "hidden",
-            background: "#0f172a",
-            boxShadow: "0 12px 30px rgba(15,23,42,0.12)",
+            background: "linear-gradient(135deg, #E0F2FE, #DBEAFE)",
+            border: "2px solid #1DB5E6",
+            boxShadow: "0 12px 30px rgba(29, 181, 230, 0.2)",
             transition: "transform 0.2s ease, box-shadow 0.2s ease",
           }}
         >

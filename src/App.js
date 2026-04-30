@@ -11,6 +11,7 @@ import { useReminder } from "./hooks/useReminder";
 import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Welcome from "./pages/Welcome";
+import Landing from "./pages/Landing";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -153,7 +154,7 @@ const AppContent = () => {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-100">
+      <div className="min-h-screen" style={{ background: "#f0f7ff", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
         {isAuthenticated() && <Navbar generationStatus={generationStatus} />}
         {globalNotice && (
           <div
@@ -166,6 +167,9 @@ const AppContent = () => {
         <main className="p-4">
           <Routes>
             <Route path="/" element={
+              isAuthenticated() ? <Navigate to="/create" replace /> : <Landing />
+            } />
+            <Route path="/auth" element={
               isAuthenticated() ? <Navigate to="/create" replace /> : <Welcome />
             } />
             <Route path="/create" element={

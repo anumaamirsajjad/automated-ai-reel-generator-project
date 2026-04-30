@@ -61,7 +61,7 @@ function Toggle({ on, onChange }) {
       onClick={() => onChange(!on)}
       style={{
         width: 44, height: 24, borderRadius: 12, cursor: "pointer",
-        background: on ? "#1a1a2e" : "#d1d5db",
+        background: on ? "linear-gradient(135deg, #1DB5E6, #2563EB)" : "#cbd5e1",
         position: "relative", transition: "background 0.2s", flexShrink: 0,
       }}
     >
@@ -82,9 +82,9 @@ function SelectInput({ value, options, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: "100%", padding: "12px 16px", appearance: "none",
-          background: "#fefce8", border: "1px solid #e5e7eb", borderRadius: 8,
-          fontSize: 14, color: "#1a1a2e", cursor: "pointer", outline: "none",
-          fontFamily: "inherit",
+          background: "#f0f7ff", border: "2px solid #1DB5E6", borderRadius: 8,
+          fontSize: 14, color: "#1E3A8A", cursor: "pointer", outline: "none",
+          fontFamily: "inherit", fontWeight: 500,
         }}
       >
         {options.map((o) => <option key={o}>{o}</option>)}
@@ -117,7 +117,7 @@ function LoadingSteps({ currentStep }) {
               width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 10, fontWeight: 700,
-              background: done ? "#7c3aed" : active ? "#3b82f6" : "#e5e7eb",
+              background: done ? "linear-gradient(135deg, #1DB5E6, #2563EB)" : active ? "linear-gradient(135deg, #1DB5E6, #2563EB)" : "#cbd5e1",
               color: done || active ? "#fff" : "#9ca3af",
               transition: "all 0.3s",
             }}>
@@ -473,19 +473,19 @@ export default function Create() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
 
         {/* ── Left Panel ── */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", borderTop: "4px solid #1DB5E6" }}>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            <span style={{ color: "#7c3aed", fontSize: 20 }}>✦</span>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a1a2e" }}>Create New Reel</h2>
+            <span style={{ color: "#1DB5E6", fontSize: 20 }}>✦</span>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: "#1E3A8A" }}>Create New Reel</h2>
           </div>
 
-          <p style={{ margin: "0 0 28px", color: "#6b7280", fontSize: 14 }}>
+          <p style={{ margin: "0 0 28px", color: "#1E40AF", fontSize: 14, fontWeight: 600 }}>
             Describe your vision and let AI bring it to life
           </p>
 
           {/* Prompt */}
-          <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#1a1a2e", marginBottom: 8 }}>
+          <label style={{ display: "block", fontWeight: 700, fontSize: 14, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
             Prompt <span style={{ color: "#ef4444" }}>*</span>
           </label>
           <textarea
@@ -495,9 +495,9 @@ export default function Create() {
             placeholder="Describe your reel... e.g., 'A serene meditation journey through nature with peaceful music and inspiring captions'"
             style={{
               width: "100%", minHeight: 100, padding: "14px 16px",
-              background: "#fefce8", border: "1px solid #e5e7eb", borderRadius: 10,
+              background: "#f0f7ff", border: "2px solid #1DB5E6", borderRadius: 10,
               fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none",
-              color: "#1a1a2e", lineHeight: 1.6, boxSizing: "border-box", marginBottom: 28,
+              color: "#1E3A8A", lineHeight: 1.6, boxSizing: "border-box", marginBottom: 28, fontWeight: 500,
             }}
           />
 
@@ -512,7 +512,7 @@ export default function Create() {
                 onClick={() => handlePickArtStyle(s.name)}
                 style={{
                   borderRadius: 12, overflow: "hidden", cursor: "pointer",
-                  border: `2px solid ${artStyle === s.name ? "#7c3aed" : "transparent"}`,
+                  border: `2px solid ${artStyle === s.name ? "#1DB5E6" : "transparent"}`, boxShadow: artStyle === s.name ? "0 0 12px rgba(29, 181, 230, 0.4)" : "none",
                   position: "relative",
                   boxShadow: artStyle === s.name ? "0 10px 24px rgba(124,58,237,0.14)" : "0 1px 4px rgba(15,23,42,0.08)",
                   transform: artStyle === s.name ? "translateY(-2px)" : "none",
@@ -524,7 +524,7 @@ export default function Create() {
                   <div style={{
                     position: "absolute", top: 4, right: 4,
                     width: 20, height: 20, borderRadius: "50%",
-                    background: "#7c3aed", display: "flex", alignItems: "center",
+                    background: "linear-gradient(135deg, #1DB5E6, #2563EB)", display: "flex", alignItems: "center",
                     justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700,
                   }}>✓</div>
                 )}
@@ -549,9 +549,9 @@ export default function Create() {
                 onClick={() => handlePickScene(s)}
                 style={{
                   padding: "20px 12px", borderRadius: 10, textAlign: "center",
-                  cursor: "pointer", fontSize: 14, color: "#1a1a2e",
-                  border: `1.5px solid ${scene === s ? "#7c3aed" : "#e5e7eb"}`,
-                  background: scene === s ? "#f5f3ff" : "#fff",
+                  cursor: "pointer", fontSize: 14, color: "#1E3A8A", fontWeight: 600,
+                  border: `2px solid ${scene === s ? "#1DB5E6" : "#cbd5e1"}`,
+                  background: scene === s ? "#E0F2FE" : "#fff",
                   fontWeight: scene === s ? 700 : 500,
                   boxShadow: scene === s ? "0 10px 20px rgba(124,58,237,0.12)" : "0 1px 4px rgba(15,23,42,0.05)",
                   transform: scene === s ? "translateY(-1px)" : "none",
@@ -564,7 +564,7 @@ export default function Create() {
           {/* Customization Options */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
             <span style={{ fontSize: 16 }}>⚙</span>
-            <h3 style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#1a1a2e" }}>Customization Options</h3>
+            <h3 style={{ margin: 0, fontWeight: 900, fontSize: 16, color: "#1E3A8A" }}>Customization Options</h3>
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 18 }}>
@@ -592,7 +592,7 @@ export default function Create() {
                     setSelectedScene("");
                   }
                 }}
-                style={{ flex: 1, padding: 10, borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff' }}
+                style={{ flex: 1, padding: 10, borderRadius: 12, border: '2px solid #1DB5E6', background: '#f0f7ff', fontWeight: 500, color: '#1E3A8A' }}
               />
             )}
           </div>
@@ -629,7 +629,7 @@ export default function Create() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
                 Video Duration
               </label>
               <SelectInput
@@ -639,7 +639,7 @@ export default function Create() {
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
                 Aspect Ratio
               </label>
               <SelectInput
@@ -651,7 +651,7 @@ export default function Create() {
           </div>
 
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
               Quality
             </label>
             <SelectInput
@@ -662,17 +662,17 @@ export default function Create() {
           </div>
 
           {/* Speed Slider */}
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 10, letterSpacing: "0.5px" }}>
             Animation Speed
           </label>
           <input
             type="range" min={0} max={100} value={speed}
             onChange={(e) => setSpeed(+e.target.value)}
-            style={{ width: "100%", accentColor: "#1a1a2e", marginBottom: 4 }}
+            style={{ width: "100%", accentColor: "#1DB5E6", marginBottom: 4 }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>Slow</span>
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>Fast</span>
+            <span style={{ fontSize: 12, color: "#1E40AF", fontWeight: 600 }}>Slow</span>
+            <span style={{ fontSize: 12, color: "#1E40AF", fontWeight: 600 }}>Fast</span>
           </div>
 
 
@@ -683,13 +683,13 @@ export default function Create() {
             style={{
               width: "100%", padding: "15px", marginTop: 8, border: "none", borderRadius: 12,
               background: prompt.trim() && !generating
-                ? "linear-gradient(135deg,#7c3aed,#3b82f6)"
-                : "#e5e7eb",
+                ? "linear-gradient(135deg, #1DB5E6, #2563EB)"
+                : "#cbd5e1",
               color: prompt.trim() && !generating ? "#fff" : "#9ca3af",
-              fontWeight: 700, fontSize: 16,
+              fontWeight: 900, fontSize: 16,
               cursor: prompt.trim() && !generating ? "pointer" : "not-allowed",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: prompt.trim() && !generating ? "0 4px 16px rgba(124,58,237,0.35)" : "none",
+              boxShadow: prompt.trim() && !generating ? "0 4px 16px rgba(29, 181, 230, 0.4)" : "none",
               transition: "all 0.2s",
             }}
           >
@@ -699,9 +699,9 @@ export default function Create() {
           {/* Error Message */}
           {error && (
             <div style={{
-              marginTop: 14, padding: "12px 16px", background: "#fef2f2",
-              border: "1px solid #fecaca", borderRadius: 10,
-              fontSize: 13, color: "#dc2626", lineHeight: 1.5,
+              marginTop: 14, padding: "12px 16px", background: "#fee2e2",
+              border: "2px solid #fca5a5", borderRadius: 10,
+              fontSize: 13, color: "#dc2626", lineHeight: 1.5, fontWeight: 600,
             }}>
               ❌ <strong>Error:</strong> {error}
             </div>
@@ -712,16 +712,16 @@ export default function Create() {
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* Preview */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", flex: 1 }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#1a1a2e" }}>Preview</h3>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Your generated result will appear here</p>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", flex: 1, borderTop: "4px solid #1DB5E6" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 900, color: "#1E3A8A" }}>Preview</h3>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#1E40AF", fontWeight: 600 }}>Your generated result will appear here</p>
 
             <div style={{
-              border: `2px dashed ${generating ? "#7c3aed" : "#e5e7eb"}`,
+              border: `2px dashed ${generating ? "#1DB5E6" : "#cbd5e1"}`,
               borderRadius: 12, aspectRatio: "9/16",
               display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", gap: 12,
-              background: generating ? "#faf5ff" : "#f9fafb",
+              background: generating ? "#E0F2FE" : "#f0f7ff",
               overflow: "hidden", transition: "all 0.3s", position: "relative",
             }}>
 

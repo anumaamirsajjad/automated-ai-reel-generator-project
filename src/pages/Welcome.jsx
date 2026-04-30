@@ -1,8 +1,7 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL, buildApiUrl } from "../lib/api";
-import bgImage from "./bg.png";
 import logo from "./logo.png";
 
 async function readJsonSafe(response) {
@@ -18,6 +17,7 @@ async function readJsonSafe(response) {
 }
 
 export default function Welcome() {
+  const location = useLocation();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -29,6 +29,16 @@ export default function Welcome() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const mode = (params.get("mode") || "").toLowerCase();
+    if (mode === "signup") {
+      setIsLogin(false);
+    } else if (mode === "login") {
+      setIsLogin(true);
+    }
+  }, [location.search]);
 
   const handleInputChange = (e) => {
     setFormData({
@@ -106,16 +116,32 @@ export default function Welcome() {
 
   return (
     <div style={{
-      height: "100vh",
-      background: `url(${bgImage}) center/cover no-repeat`,
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #1DB5E6 0%, #2563EB 50%, #1E3A8A 100%)",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: "10px",
+      padding: "24px 12px",
       position: "relative",
-      overflow: "hidden"
+      overflowX: "hidden",
+      overflowY: "auto",
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     }}>
+      <style>{`
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        @keyframes slideInUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInDown { from { opacity: 0; transform: translateY(-40px); } to { opacity: 1; transform: translateY(0); } }
+        .center-stack {
+          width: 100%;
+          max-width: 380px;
+          text-align: center;
+          color: white;
+          position: relative;
+          z-index: 1;
+        }
+      `}</style>
+
       {/* Background overlay for better text readability */}
       <div style={{
         position: "absolute",
@@ -123,68 +149,79 @@ export default function Welcome() {
         left: 0,
         right: 0,
         bottom: 0,
-        background: "rgba(255, 255, 255, 0.1)",
+        background: "rgba(0, 0, 0, 0.15)",
         backdropFilter: "blur(1px)"
       }}></div>
-      {/* App Branding */}
-      <div style={{
-        textAlign: "center",
-        marginBottom: "20px",
-        color: "#1a1a2e",
-        position: "relative",
-        zIndex: 1
-      }}>
-        <img
-          src={logo}
-          alt="Reelify Logo"
-          style={{
-            width: "80px",
-            height: "80px",
-            borderRadius: "20px",
-            margin: "0 auto 20px",
-            objectFit: "cover",
-            boxShadow: "0 8px 32px rgba(124, 58, 237, 0.3)"
-          }}
-        />
-        <h1 style={{
-          fontSize: "32px",
-          fontWeight: "700",
-          margin: "0 0 8px 0",
-          textShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          color: "#1a1a2e"
-        }}>
-          Reelify
-        </h1>
-        <p style={{
-          fontSize: "16px",
-          opacity: 0.9,
-          margin: 0,
-          textShadow: "0 1px 2px rgba(0,0,0,0.1)",
-          color: "#374151"
-        }}>
-          AI-Powered Video Creation
-        </p>
-      </div>
 
-      {/* Auth Form */}
-      <div style={{
-        background: "rgba(255, 255, 255, 0.95)",
-        backdropFilter: "blur(10px)",
-        borderRadius: "20px",
-        padding: "20px",
-        width: "100%",
-        maxWidth: "350px",
-        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.15)",
-        border: "1px solid rgba(255, 255, 255, 0.2)",
-        position: "relative",
-        zIndex: 1
-      }}>
+      <div className="center-stack">
+          {/* App Branding */}
+          <div style={{
+            marginBottom: "18px",
+            animation: "slideInDown 0.8s ease-out"
+          }}>
+            <div style={{
+              animation: "bounce 3s ease-in-out infinite",
+              display: "inline-block"
+            }}>
+              <img
+                src={logo}
+                alt="Reelify Logo"
+                style={{
+                  width: "80px",
+                  height: "80px",
+                  borderRadius: "20px",
+                  margin: "0 auto 16px",
+                  objectFit: "cover",
+                  boxShadow: "0 12px 40px rgba(0, 0, 0, 0.3)",
+                  border: "3px solid rgba(255, 255, 255, 0.3)"
+                }}
+              />
+            </div>
+            <h1 style={{
+              fontSize: "44px",
+              fontWeight: "900",
+              margin: "0 0 6px 0",
+              textShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              color: "white",
+              letterSpacing: "-1px"
+            }}>
+              Reelify
+            </h1>
+            <p style={{
+              fontSize: "15px",
+              opacity: 0.95,
+              margin: 0,
+              textShadow: "0 2px 6px rgba(0,0,0,0.15)",
+              color: "white",
+              fontWeight: "600",
+              letterSpacing: "0.5px"
+            }}>
+              Create AI-powered video reels
+            </p>
+          </div>
+
+          {/* Auth Form */}
+          <div style={{
+            background: "rgba(219, 234, 254, 0.96)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "20px",
+            padding: "20px",
+            width: "100%",
+            maxWidth: "350px",
+            margin: "0 auto",
+            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
+            border: "2px solid rgba(255, 255, 255, 0.3)",
+            position: "relative",
+            zIndex: 1,
+            animation: "slideInUp 0.8s ease-out"
+          }}>
         <h2 style={{
           textAlign: "center",
           margin: "0 0 30px 0",
-          color: "#1a1a2e",
-          fontSize: "24px",
-          fontWeight: "600"
+          color: "#1E3A8A",
+          fontSize: "26px",
+          fontWeight: "900",
+          letterSpacing: "-0.5px"
         }}>
           {isLogin ? "Welcome Back" : "Create Account"}
         </h2>
@@ -196,8 +233,9 @@ export default function Welcome() {
             padding: "12px",
             borderRadius: "8px",
             marginBottom: "20px",
-            fontSize: "14px",
-            border: "1px solid #fecaca"
+            fontSize: "13px",
+            border: "2px solid #fca5a5",
+            fontWeight: "600"
           }}>
             {error}
           </div>
@@ -209,9 +247,10 @@ export default function Welcome() {
               <label style={{
                 display: "block",
                 marginBottom: "8px",
-                color: "#374151",
+                color: "#1E3A8A",
                 fontSize: "14px",
-                fontWeight: "500"
+                fontWeight: "700",
+                letterSpacing: "0.5px"
               }}>
                 Username
               </label>
@@ -225,15 +264,17 @@ export default function Welcome() {
                 style={{
                   width: "100%",
                   padding: "12px 16px",
-                  border: "2px solid #e5e7eb",
+                  border: "2px solid #1DB5E6",
                   borderRadius: "10px",
-                  fontSize: "16px",
+                  fontSize: "15px",
                   transition: "border-color 0.2s",
                   outline: "none",
-                  boxSizing: "border-box"
+                  boxSizing: "border-box",
+                  backgroundColor: "#f0f7ff",
+                  fontWeight: "500"
                 }}
-                onFocus={(e) => e.target.style.borderColor = "#7c3aed"}
-                onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                onFocus={(e) => e.target.style.borderColor = "#2563EB"}
+                onBlur={(e) => e.target.style.borderColor = "#1DB5E6"}
               />
             </div>
           )}
@@ -242,9 +283,10 @@ export default function Welcome() {
             <label style={{
               display: "block",
               marginBottom: "8px",
-              color: "#374151",
+              color: "#1E3A8A",
               fontSize: "14px",
-              fontWeight: "500"
+              fontWeight: "700",
+              letterSpacing: "0.5px"
             }}>
               Email Address
             </label>
@@ -258,15 +300,17 @@ export default function Welcome() {
               style={{
                 width: "100%",
                 padding: "12px 16px",
-                border: "2px solid #e5e7eb",
+                border: "2px solid #1DB5E6",
                 borderRadius: "10px",
-                fontSize: "16px",
+                fontSize: "15px",
                 transition: "border-color 0.2s",
                 outline: "none",
-                boxSizing: "border-box"
+                boxSizing: "border-box",
+                backgroundColor: "#f0f7ff",
+                fontWeight: "500"
               }}
-              onFocus={(e) => e.target.style.borderColor = "#7c3aed"}
-              onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+              onFocus={(e) => e.target.style.borderColor = "#2563EB"}
+              onBlur={(e) => e.target.style.borderColor = "#1DB5E6"}
             />
           </div>
 
@@ -274,9 +318,10 @@ export default function Welcome() {
             <label style={{
               display: "block",
               marginBottom: "8px",
-              color: "#374151",
+              color: "#1E3A8A",
               fontSize: "14px",
-              fontWeight: "500"
+              fontWeight: "700",
+              letterSpacing: "0.5px"
             }}>
               Password
             </label>
@@ -290,15 +335,17 @@ export default function Welcome() {
               style={{
                 width: "100%",
                 padding: "12px 16px",
-                border: "2px solid #e5e7eb",
+                border: "2px solid #1DB5E6",
                 borderRadius: "10px",
-                fontSize: "16px",
+                fontSize: "15px",
                 transition: "border-color 0.2s",
                 outline: "none",
-                boxSizing: "border-box"
+                boxSizing: "border-box",
+                backgroundColor: "#f0f7ff",
+                fontWeight: "500"
               }}
-              onFocus={(e) => e.target.style.borderColor = "#7c3aed"}
-              onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+              onFocus={(e) => e.target.style.borderColor = "#2563EB"}
+              onBlur={(e) => e.target.style.borderColor = "#1DB5E6"}
             />
           </div>
 
@@ -307,9 +354,10 @@ export default function Welcome() {
               <label style={{
                 display: "block",
                 marginBottom: "8px",
-                color: "#374151",
+                color: "#1E3A8A",
                 fontSize: "14px",
-                fontWeight: "500"
+                fontWeight: "700",
+                letterSpacing: "0.5px"
               }}>
                 Confirm Password
               </label>
@@ -323,15 +371,17 @@ export default function Welcome() {
                 style={{
                   width: "100%",
                   padding: "12px 16px",
-                  border: "2px solid #e5e7eb",
+                  border: "2px solid #1DB5E6",
                   borderRadius: "10px",
-                  fontSize: "16px",
+                  fontSize: "15px",
                   transition: "border-color 0.2s",
                   outline: "none",
-                  boxSizing: "border-box"
+                  boxSizing: "border-box",
+                  backgroundColor: "#f0f7ff",
+                  fontWeight: "500"
                 }}
-                onFocus={(e) => e.target.style.borderColor = "#7c3aed"}
-                onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                onFocus={(e) => e.target.style.borderColor = "#2563EB"}
+                onBlur={(e) => e.target.style.borderColor = "#1DB5E6"}
               />
             </div>
           )}
@@ -342,28 +392,29 @@ export default function Welcome() {
             style={{
               width: "100%",
               padding: "14px",
-              background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
+              background: "linear-gradient(135deg, #1DB5E6, #2563EB)",
               color: "white",
               border: "none",
               borderRadius: "10px",
               fontSize: "16px",
-              fontWeight: "600",
+              fontWeight: "900",
               cursor: isLoading ? "not-allowed" : "pointer",
               transition: "transform 0.2s, box-shadow 0.2s",
-              boxShadow: "0 4px 12px rgba(124, 58, 237, 0.3)",
+              boxShadow: "0 4px 12px rgba(29, 181, 230, 0.4)",
               marginBottom: "20px",
-              opacity: isLoading ? 0.7 : 1
+              opacity: isLoading ? 0.7 : 1,
+              letterSpacing: "0.5px"
             }}
             onMouseEnter={(e) => {
               if (!isLoading) {
                 e.target.style.transform = "translateY(-2px)";
-                e.target.style.boxShadow = "0 6px 20px rgba(124, 58, 237, 0.4)";
+                e.target.style.boxShadow = "0 6px 20px rgba(29, 181, 230, 0.5)";
               }
             }}
             onMouseLeave={(e) => {
               if (!isLoading) {
                 e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = "0 4px 12px rgba(124, 58, 237, 0.3)";
+                e.target.style.boxShadow = "0 4px 12px rgba(29, 181, 230, 0.4)";
               }
             }}
           >
@@ -377,34 +428,38 @@ export default function Welcome() {
             style={{
               background: "none",
               border: "none",
-              color: "#7c3aed",
+              color: "#1E40AF",
               fontSize: "14px",
-              fontWeight: "500",
+              fontWeight: "700",
               cursor: "pointer",
               textDecoration: "underline",
               padding: "8px",
               borderRadius: "6px",
-              transition: "background-color 0.2s"
+              transition: "background-color 0.2s",
+              letterSpacing: "0.5px"
             }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = "rgba(124, 58, 237, 0.1)"}
+            onMouseEnter={(e) => e.target.style.backgroundColor = "rgba(29, 181, 230, 0.1)"}
             onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
           >
             {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
           </button>
         </div>
-      </div>
+          </div>
 
-      {/* Footer */}
-      <div style={{
-        marginTop: "20px",
-        textAlign: "center",
-        color: "rgba(255, 255, 255, 0.8)",
-        fontSize: "14px",
-        position: "relative",
-        zIndex: 1
-      }}>
-        <p>Secure authentication powered by AI</p>
+          {/* Footer */}
+          <div style={{
+            marginTop: "14px",
+            textAlign: "center",
+            color: "rgba(255, 255, 255, 0.9)",
+            fontSize: "14px",
+            position: "relative",
+            zIndex: 1
+          }}>
+            <p style={{ margin: 0, fontWeight: 600, letterSpacing: "0.3px", animation: "slideInUp 1s ease-out" }}>Secure authentication powered by AI</p>
+          </div>
+        </div>
       </div>
-    </div>
+    
+    
   );
 }

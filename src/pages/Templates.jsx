@@ -35,13 +35,10 @@ async function readJsonSafe(response) {
 }
 
 function getTemplateFallbackTheme(category) {
+  const iconMap = { "business": "📈", "travel": "🌍", "food": "🍳", "inspiration": "✨", "technology": "⚡" };
   const key = String(category || "").toLowerCase();
-  if (key === "business") return { bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", icon: "📈" };
-  if (key === "travel") return { bg: "linear-gradient(135deg,#ccfbf1,#99f6e4)", icon: "🌍" };
-  if (key === "food") return { bg: "linear-gradient(135deg,#ffedd5,#fed7aa)", icon: "🍳" };
-  if (key === "inspiration") return { bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", icon: "✨" };
-  if (key === "technology") return { bg: "linear-gradient(135deg,#e2e8f0,#cbd5e1)", icon: "⚡" };
-  return { bg: "linear-gradient(135deg,#ecfeff,#dbeafe)", icon: "🎬" };
+  const icon = iconMap[key] || "🎬";
+  return { bg: "#F0F9FF", icon, color: "#1E3A8A" };
 }
 
 export default function Templates() {
@@ -276,7 +273,7 @@ export default function Templates() {
           <div
             key={t.id}
             style={{
-              background: "#fff", borderRadius: 16, overflow: "hidden",
+              background: "#F0F9FF", borderRadius: 16, overflow: "hidden", border: "2px solid #93C5FD",
               boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
               transition: "box-shadow 0.2s, transform 0.2s",
             }}
@@ -299,11 +296,11 @@ export default function Templates() {
                     style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }}
                   />
                 ) : (
-                  <div style={{ textAlign: "center", color: "#0f172a", padding: 14 }}>
+                  <div style={{ textAlign: "center", color: getTemplateFallbackTheme(t.category).color, padding: 14 }}>
                     <div style={{ fontSize: 26, marginBottom: 6 }}>{getTemplateFallbackTheme(t.category).icon}</div>
                     <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{(t.name || "T").charAt(0).toUpperCase()}</div>
                     <div style={{ fontSize: 12, fontWeight: 700, marginTop: 6 }}>Template Preview</div>
-                    <div style={{ fontSize: 11, color: "#334155", marginTop: 3 }}>{t.category || "General"}</div>
+                    <div style={{ fontSize: 11, color: "#1E40AF", marginTop: 3 }}>{t.category || "General"}</div>
                   </div>
                 )}
               </div>
@@ -369,28 +366,28 @@ export default function Templates() {
 
       {/* ── Custom Template CTA ── */}
       <div style={{
-        background: "linear-gradient(135deg,#f5f3ff,#ede9fe)",
-        border: "2px dashed #c4b5fd", borderRadius: 20,
+        background: "linear-gradient(135deg, #BAE6FD, #A5D6FF)",
+        border: "2px dashed #7DD3FC", borderRadius: 20,
         padding: "48px 32px", textAlign: "center",
       }}>
         <div style={{
           width: 56, height: 56, borderRadius: "50%",
-          background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
+          background: "rgba(255, 255, 255, 0.25)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 24, margin: "0 auto 16px",
+          fontSize: 24, margin: "0 auto 16px", color: "white",
         }}>⊞</div>
-        <h3 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700, color: "#1a1a2e" }}>
+        <h3 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700, color: "white" }}>
           Need a Custom Template?
         </h3>
-        <p style={{ margin: "0 0 24px", color: "#6b7280", fontSize: 14, maxWidth: 400, marginLeft: "auto", marginRight: "auto" }}>
+        <p style={{ margin: "0 0 24px", color: "rgba(255, 255, 255, 0.85)", fontSize: 14, maxWidth: 400, marginLeft: "auto", marginRight: "auto" }}>
           Save your favorite reel configurations as reusable presets for your team.
         </p>
         <button
           type="button"
           onClick={openCreate}
           style={{
-            padding: "12px 28px", border: "1.5px solid #1a1a2e", borderRadius: 10,
-            background: "#fff", color: "#1a1a2e", fontWeight: 600, fontSize: 14,
+            padding: "12px 28px", border: "2px solid white", borderRadius: 10,
+            background: "rgba(255, 255, 255, 0.2)", color: "white", fontWeight: 700, fontSize: 14,
             cursor: "pointer", fontFamily: "inherit",
           }}
         >Create Custom Template</button>
@@ -479,7 +476,7 @@ function Field({ label, value, onChange, multiline, required, type = "text" }) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
-          style={{ width: "100%", boxSizing: "border-box", border: "1px solid #d1d5db", borderRadius: 8, padding: 8, fontFamily: "inherit" }}
+          style={{ width: "100%", boxSizing: "border-box", border: "2px solid #93C5FD", borderRadius: 8, padding: 8, fontFamily: "inherit", backgroundColor: "#F0F9FF", color: "#1E3A8A", fontWeight: 500 }}
         />
       ) : (
         <input
@@ -487,7 +484,7 @@ function Field({ label, value, onChange, multiline, required, type = "text" }) {
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          style={{ width: "100%", boxSizing: "border-box", border: "1px solid #d1d5db", borderRadius: 8, padding: 8, fontFamily: "inherit" }}
+          style={{ width: "100%", boxSizing: "border-box", border: "2px solid #93C5FD", borderRadius: 8, padding: 8, fontFamily: "inherit", backgroundColor: "#F0F9FF", color: "#1E3A8A", fontWeight: 500 }}
         />
       )}
     </label>
@@ -501,7 +498,7 @@ function SelectField({ label, value, options, onChange }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{ width: "100%", boxSizing: "border-box", border: "1px solid #d1d5db", borderRadius: 8, padding: 8, fontFamily: "inherit" }}
+        style={{ width: "100%", boxSizing: "border-box", border: "2px solid #93C5FD", borderRadius: 8, padding: 8, fontFamily: "inherit", backgroundColor: "#F0F9FF", color: "#1E3A8A", fontWeight: 500 }}
       >
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>

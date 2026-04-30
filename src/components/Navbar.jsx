@@ -33,7 +33,8 @@ export default function Navbar({ generationStatus = "idle" }) {
         top: 0,
         zIndex: 100,
         background: "#fff",
-        borderBottom: "1px solid #e5e7eb",
+        borderBottom: "2px solid #1DB5E6",
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
       }}
     >
       {/* Top bar */}
@@ -59,11 +60,11 @@ export default function Navbar({ generationStatus = "idle" }) {
             }}
           />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a2e" }}>
+            <div style={{ fontWeight: 900, fontSize: 18, color: "#1E3A8A", letterSpacing: "-0.5px" }}>
               Reelify
             </div>
-            <div style={{ fontSize: 11, color: "#9ca3af" }}>
-              AI-Powered Video Creation
+            <div style={{ fontSize: 11, color: "#1E40AF", fontWeight: 600 }}>
+              AI Video Creation
             </div>
           </div>
         </div>
@@ -77,9 +78,9 @@ export default function Navbar({ generationStatus = "idle" }) {
                 borderRadius: 999,
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#6d28d9",
-                background: "#ede9fe",
-                border: "1px solid #ddd6fe",
+                color: "white",
+                background: "linear-gradient(135deg, #1DB5E6, #2563EB)",
+                border: "2px solid #1E3A8A",
               }}
             >
               Rendering...
@@ -87,7 +88,7 @@ export default function Navbar({ generationStatus = "idle" }) {
           )}
           {user && (
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ color: "#374151", fontSize: "14px" }}>
+              <span style={{ color: "#1E3A8A", fontSize: "14px", fontWeight: "700", letterSpacing: "0.5px" }}>
                 Welcome, {user.username}
               </span>
               <button
@@ -97,16 +98,24 @@ export default function Navbar({ generationStatus = "idle" }) {
                 }}
                 style={{
                   padding: "8px 16px",
-                  border: "1px solid #d1d5db",
+                  border: "2px solid #1DB5E6",
                   borderRadius: 8,
                   background: "white",
-                  color: "#374151",
+                  color: "#1E3A8A",
                   fontSize: "14px",
+                  fontWeight: "700",
                   cursor: "pointer",
-                  transition: "background-color 0.2s"
+                  transition: "all 0.2s",
+                  letterSpacing: "0.5px"
                 }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = "#f9fafb"}
-                onMouseLeave={(e) => e.target.style.backgroundColor = "white"}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#E0F2FE";
+                  e.target.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "white";
+                  e.target.style.transform = "translateY(0)";
+                }}
               >
                 Logout
               </button>
@@ -135,14 +144,14 @@ export default function Navbar({ generationStatus = "idle" }) {
               borderRadius: "8px 8px 0 0",
               background: "transparent",
               cursor: "pointer",
-              color: location.pathname === item.path ? "#7c3aed" : "#6b7280",
+              color: location.pathname === item.path ? "#1E3A8A" : "#6b7280",
               fontWeight: location.pathname === item.path ? 600 : 400,
               fontSize: 14,
               display: "flex",
               alignItems: "center",
               gap: 6,
               borderBottom:
-                location.pathname === item.path ? "2px solid #7c3aed" : "2px solid transparent",
+                location.pathname === item.path ? "2px solid #1E3A8A" : "2px solid transparent",
               transition: "all 0.15s",
               textDecoration: "none",
             }}

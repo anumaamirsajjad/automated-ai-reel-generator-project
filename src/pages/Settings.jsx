@@ -188,12 +188,12 @@ export default function Settings() {
   };
 
   return (
-    <div style={{ padding: 28, maxWidth: 720, margin: "0 auto" }}>
-      <h1 style={{ margin: 0, fontSize: 26 }}>Profile</h1>
-      <p style={{ color: "#6b7280", marginTop: 6 }}>Edit your email, name, and password.</p>
+    <div style={{ padding: 28, maxWidth: 720, margin: "0 auto", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
+      <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, color: "#1E3A8A", letterSpacing: "-0.5px" }}>Profile</h1>
+      <p style={{ color: "#1E40AF", marginTop: 6, fontWeight: 600, fontSize: 15, letterSpacing: "0.5px" }}>Edit your email, name, and password.</p>
 
       {loadingProfile && (
-        <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#eff6ff", color: "#1d4ed8" }}>
+        <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#E0F2FE", color: "#1E3A8A", fontWeight: 600 }}>
           Loading profile...
         </div>
       )}
@@ -206,7 +206,9 @@ export default function Settings() {
             borderRadius: 8,
             background: message.type === "error" ? "#fee2e2" : "#ecfdf5",
             color: message.type === "error" ? "#991b1b" : "#065f46",
-            border: message.type === "error" ? "1px solid #fecaca" : "1px solid #a7f3d0",
+            border: message.type === "error" ? "2px solid #fca5a5" : "2px solid #a7f3d0",
+            fontWeight: 600,
+            fontSize: 14
           }}
         >
           {message.text}
@@ -216,7 +218,7 @@ export default function Settings() {
       <div style={{ marginTop: 20, display: 'grid', gap: 12 }}>
         {/* Avatar */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ width: 88, height: 88, borderRadius: 12, overflow: 'hidden', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 88, height: 88, borderRadius: 12, overflow: 'hidden', background: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #1DB5E6' }}>
             {avatarPreview ? (
               <img src={avatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
@@ -224,50 +226,50 @@ export default function Settings() {
             )}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Profile Picture</div>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Profile Picture</div>
             <div style={{ marginTop: 6 }}>
-              <button type="button" onClick={() => handleStartEditField('avatar')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Edit</button>
+              <button type="button" onClick={() => handleStartEditField('avatar')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Edit</button>
             </div>
           </div>
         </div>
 
         {/* Email */}
-        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Gmail</div>
-            <div style={{ fontSize: 14, color: '#111827', marginTop: 6 }}>{initialProfile.email || email || '—'}</div>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Gmail</div>
+            <div style={{ fontSize: 15, color: '#111827', marginTop: 6, fontWeight: 600 }}>{initialProfile.email || email || '—'}</div>
           </div>
           <div>
-            <button type="button" onClick={() => handleStartEditField('email')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Edit</button>
+            <button type="button" onClick={() => handleStartEditField('email')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Edit</button>
           </div>
         </div>
 
         {/* Name */}
-        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Name</div>
-            <div style={{ fontSize: 14, color: '#111827', marginTop: 6 }}>{initialProfile.username || username || '—'}</div>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Name</div>
+            <div style={{ fontSize: 15, color: '#111827', marginTop: 6, fontWeight: 600 }}>{initialProfile.username || username || '—'}</div>
           </div>
           <div>
-            <button type="button" onClick={() => handleStartEditField('username')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Edit</button>
+            <button type="button" onClick={() => handleStartEditField('username')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Edit</button>
           </div>
         </div>
 
         {/* Password */}
-        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Password</div>
-            <div style={{ fontSize: 14, color: '#111827', marginTop: 6 }}>********</div>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Password</div>
+            <div style={{ fontSize: 15, color: '#111827', marginTop: 6, fontWeight: 600 }}>••••••••</div>
           </div>
           <div>
-            <button type="button" onClick={() => handleStartEditField('password')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Change Password</button>
+            <button type="button" onClick={() => handleStartEditField('password')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Change Password</button>
           </div>
         </div>
 
         {/* Editing panels */}
             {editingField === 'avatar' && (
-              <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
-                <label style={{ fontSize: 13, color: '#374151' }}>Upload Profile Picture</label>
+              <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+                <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Upload Profile Picture</label>
                 <input type="file" accept="image/*" onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
@@ -278,11 +280,11 @@ export default function Settings() {
                 }} style={{ marginTop: 8 }} />
                 {avatarPreview && (
                   <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <div style={{ width: 88, height: 88, borderRadius: 8, overflow: 'hidden', background: '#f3f4f6' }}>
+                    <div style={{ width: 88, height: 88, borderRadius: 8, overflow: 'hidden', background: '#E0F2FE', border: '2px solid #1DB5E6' }}>
                       <img src={avatarPreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(resolveMediaUrl(initialProfile.profilePicture || null)); setEditingField(null); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
+                      <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(resolveMediaUrl(initialProfile.profilePicture || null)); setEditingField(null); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
                       <button type="button" onClick={async () => {
                         if (!avatarFile) { setMessage({ type: 'error', text: 'Select an image first' }); return; }
                         const token = localStorage.getItem('authToken');
@@ -305,7 +307,7 @@ export default function Settings() {
                           setEditingField(null);
                         } catch (err) { setMessage({ type: 'error', text: 'Upload failed' }); }
                         finally { setSaving(false); }
-                      }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }}>Upload</button>
+                      }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Upload</button>
                     </div>
                   </div>
                 )}
@@ -313,47 +315,47 @@ export default function Settings() {
             )}
 
         {editingField === 'email' && (
-          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
-            <label style={{ fontSize: 13, color: '#374151' }}>Gmail (email)</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+            <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Gmail (email)</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
             <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
+              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
             </div>
           </div>
         )}
 
         {editingField === 'username' && (
-          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
-            <label style={{ fontSize: 13, color: '#374151' }}>Name</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+            <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Name</label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
             <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
+              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
             </div>
           </div>
         )}
 
         {editingField === 'password' && (
-          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb' }}>
-            <label style={{ fontSize: 13, color: '#374151' }}>Current Password</label>
-            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+            <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Current Password</label>
+            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
               <div>
-                <label style={{ fontSize: 13, color: '#374151' }}>New Password</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>Minimum 6 characters. Use mixed case, numbers, symbols for stronger password.</div>
+                <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
+                <div style={{ fontSize: 13, color: '#1E40AF', marginTop: 6, fontWeight: 600 }}>Minimum 6 characters. Use mixed case, numbers, symbols for stronger password.</div>
               </div>
               <div>
-                <label style={{ fontSize: 13, color: '#374151' }}>Confirm New Password</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8 }} />
+                <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
                 <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 13, color: '#374151' }}>Strength: <span style={{ fontWeight: 600 }}>{passwordStrength(newPassword).label}</span></div>
+                  <div style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700 }}>Strength: <span style={{ fontWeight: 900, color: '#2563EB' }}>{passwordStrength(newPassword).label}</span></div>
                 </div>
               </div>
             </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e5e7eb', cursor: 'pointer' }}>Cancel</button>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
               <button type="button" onClick={async (e) => {
                   e.preventDefault();
                   const token = localStorage.getItem('authToken');
@@ -370,7 +372,7 @@ export default function Settings() {
                     setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setEditingField(null);
                   } catch (err) { setMessage({ type: 'error', text: 'Unexpected error' }); }
                   finally { setSaving(false); }
-              }} style={{ padding: '8px 12px', borderRadius: 8, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer' }} disabled={saving}>Change</button>
+              }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }} disabled={saving}>Change</button>
             </div>
           </div>
         )}
