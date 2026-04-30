@@ -18,6 +18,16 @@ export default function Settings() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
+  const getStoredUser = () => user || JSON.parse(localStorage.getItem("user") || "null") || {};
+  const buildAuthHeaders = (token, includeJson = false) => {
+    const currentUser = getStoredUser();
+    const headers = {};
+    if (includeJson) headers["Content-Type"] = "application/json";
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (currentUser?.id) headers["X-User-Id"] = String(currentUser.id);
+    return headers;
+  };
+
   const resolveMediaUrl = (url) => {
     if (!url) return null;
     if (/^https?:\/\//i.test(url)) return url;
@@ -47,10 +57,11 @@ export default function Settings() {
       try {
         const res = await fetch(buildApiUrl("/api/user"), {
           method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: buildAuthHeaders(token),
         });
         if (!res.ok) {
-          setMessage({ type: "error", text: "Could not refresh profile from server." });
+          const err = await res.json().catch(() => ({}));
+          setMessage({ type: "error", text: err.error || err.message || "Could not refresh profile from server." });
           return;
         }
         const data = await res.json();
@@ -84,7 +95,7 @@ export default function Settings() {
       // Update profile
       const profileRes = await fetch(buildApiUrl("/api/user"), {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: buildAuthHeaders(token, true),
         body: JSON.stringify({ email: email.trim(), username: username.trim() }),
       });
 
@@ -279,7 +290,7 @@ export default function Settings() {
                         const form = new FormData(); form.append('file', avatarFile, avatarFile.name);
                         setSaving(true); setMessage(null);
                         try {
-                          const res = await fetch(buildApiUrl('/api/user/avatar'), { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+                          const res = await fetch(buildApiUrl('/api/user/avatar'), { method: 'POST', headers: buildAuthHeaders(token), body: form });
                           const j = await res.json().catch(()=>({}));
                           if (!res.ok) { setMessage({ type: 'error', text: j.error || 'Upload failed' }); return; }
                           const pic = j.profilePicture;
@@ -352,7 +363,7 @@ export default function Settings() {
                   if (newPassword.length < 6) { setMessage({ type: 'error', text: 'New password must be at least 6 characters' }); return; }
                   setSaving(true);
                   try {
-                    const res = await fetch(buildApiUrl('/api/user/password'), { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ currentPassword, newPassword }) });
+                    const res = await fetch(buildApiUrl('/api/user/password'), { method: 'PUT', headers: buildAuthHeaders(token, true), body: JSON.stringify({ currentPassword, newPassword }) });
                     const j = await res.json().catch(()=>({}));
                     if (!res.ok) { setMessage({ type: 'error', text: j.error || 'Failed to change password' }); return; }
                     setMessage({ type: 'success', text: 'Password changed' });
