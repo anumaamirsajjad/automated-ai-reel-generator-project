@@ -30,7 +30,12 @@ from reel_generator import (
 )
 
 app = Flask(__name__)
-# Use a deterministic sqlite file located next to server/app.py for easy inspection with SQLite tools
+# Backend service and database notes:
+# - This is the Flask backend API server for the reel generator application.
+# - It stores metadata in a SQL database via Flask-SQLAlchemy.
+# - For local development the current database is SQLite, stored in `server/app.db`.
+# - Generated video files themselves are not stored in the database; they are saved on disk in `server/generated`.
+# - The database stores metadata like gallery entries, generated flags, filenames, URLs, and user data.
 DB_FILE = Path(__file__).parent.joinpath("app.db").resolve()
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{DB_FILE.as_posix()}"
 app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'  # Change this in production
