@@ -45,6 +45,9 @@ migrate = Migrate(app, db)
 CORS(app)
 
 class User(db.Model):
+    # User model: stores user accounts with authentication details.
+    # Passwords are hashed using werkzeug.security.generate_password_hash.
+    # Profile pictures are stored as file paths in the generated directory.
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -151,6 +154,9 @@ GENERATED_DIR = Path(__file__).parent.joinpath("generated")
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path(__file__).parent.joinpath("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+# File storage directories:
+# - GENERATED_DIR: where generated video files and thumbnails are saved on disk.
+# - DATA_DIR: where JSON settings, gallery, and events data are stored (legacy, now mostly in DB).
 SETTINGS_FILE = DATA_DIR.joinpath("settings.json")
 GALLERY_FILE = DATA_DIR.joinpath("gallery.json")
 EVENTS_FILE = DATA_DIR.joinpath("events.json")
@@ -1011,7 +1017,10 @@ def api_event():
         print(tb, file=sys.stderr)
         return jsonify({"success": False, "error": str(e)}), 500
 
-
+# Main reel generation endpoint: creates AI-generated videos from prompts.
+    # Process: generates scene images, renders cinematic clips, concatenates into final video.
+    # Output: saves video to GENERATED_DIR and adds metadata to Gallery database.
+    
 @app.route("/api/reel-generator", methods=["POST"])
 def reel_generator():
     data = request.get_json(force=True)
