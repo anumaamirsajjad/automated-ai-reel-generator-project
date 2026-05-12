@@ -1,9 +1,19 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { API_BASE_URL, buildApiUrl } from "../lib/api";
+import { getGenerationState, startGeneration, subscribeGeneration } from "../services/reelGenerationManager";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const WEBHOOK_URL = "http://localhost:5678/webhook/reel-generator";
-// Change the above to your actual n8n webhook URL when deploying
+const GENERATE_PATH = "/api/reel-generator";
+const GENERATE_URL = buildApiUrl(GENERATE_PATH);
+const REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_GENERATE_TIMEOUT_MS || 420000);
+// You can still swap this backend endpoint to your n8n workflow later.
 // ──────────────────────────────────────────────────────────────────────────────
+
+function resolveBackendUrl(url) {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE_URL ? `${API_BASE_URL}${url.startsWith("/") ? url : `/${url}`}` : url;
+}
 
 const ART_STYLES = [
   { name: "Realistic",   thumb: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&q=80" },
@@ -23,10 +33,26 @@ const SCENES = [
   "Desert Dunes",
 ];
 
-// Maps "15 seconds" → number of scenes (approx 1 scene per 3 seconds)
+function durationToSeconds(duration) {
+  return Number.parseInt(duration, 10) || 15;
+}
+
+// Maps reel duration to number of images for a cohesive reel.
 function durationToSceneCount(duration) {
-  const secs = parseInt(duration);
-  return Math.max(3, Math.round(secs / 3));
+  const seconds = durationToSeconds(duration);
+
+  if (seconds <= 5) return 2;
+  if (seconds <= 10) return 4;
+  return 6;
+}
+
+function getLoadingStepFromElapsed(startedAt) {
+  if (!startedAt) return 0;
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < 4000) return 0;
+  if (elapsed < 11000) return 1;
+  if (elapsed < 17000) return 2;
+  return 3;
 }
 
 function Toggle({ on, onChange }) {
@@ -35,7 +61,7 @@ function Toggle({ on, onChange }) {
       onClick={() => onChange(!on)}
       style={{
         width: 44, height: 24, borderRadius: 12, cursor: "pointer",
-        background: on ? "#1a1a2e" : "#d1d5db",
+        background: on ? "linear-gradient(135deg, #1DB5E6, #2563EB)" : "#cbd5e1",
         position: "relative", transition: "background 0.2s", flexShrink: 0,
       }}
     >
@@ -56,9 +82,9 @@ function SelectInput({ value, options, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: "100%", padding: "12px 16px", appearance: "none",
-          background: "#fefce8", border: "1px solid #e5e7eb", borderRadius: 8,
-          fontSize: 14, color: "#1a1a2e", cursor: "pointer", outline: "none",
-          fontFamily: "inherit",
+          background: "#f0f7ff", border: "2px solid #1DB5E6", borderRadius: 8,
+          fontSize: 14, color: "#1E3A8A", cursor: "pointer", outline: "none",
+          fontFamily: "inherit", fontWeight: 500,
         }}
       >
         {options.map((o) => <option key={o}>{o}</option>)}
@@ -73,11 +99,10 @@ function SelectInput({ value, options, onChange }) {
 
 // ─── Loading Steps Component ───────────────────────────────────────────────────
 const LOADING_STEPS = [
-  "Writing scene prompts with AI",
-  "Refining prompts for image quality",
-  "Generating images with FLUX",
-  "Stitching frames into video",
-  "Finalizing your reel",
+  "Creating a realistic scene image",
+  "Applying cinematic camera motion",
+  "Encoding your reel",
+  "Finalizing output",
 ];
 
 function LoadingSteps({ currentStep }) {
@@ -92,7 +117,7 @@ function LoadingSteps({ currentStep }) {
               width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 10, fontWeight: 700,
-              background: done ? "#7c3aed" : active ? "#3b82f6" : "#e5e7eb",
+              background: done ? "linear-gradient(135deg, #1DB5E6, #2563EB)" : active ? "linear-gradient(135deg, #1DB5E6, #2563EB)" : "#cbd5e1",
               color: done || active ? "#fff" : "#9ca3af",
               transition: "all 0.3s",
             }}>
@@ -105,6 +130,7 @@ function LoadingSteps({ currentStep }) {
               transition: "color 0.3s",
             }}>{label}</span>
           </div>
+
         );
       })}
     </div>
@@ -113,33 +139,234 @@ function LoadingSteps({ currentStep }) {
 
 export default function Create() {
   const [prompt, setPrompt]         = useState("");
-  const [artStyle, setArtStyle]     = useState("Realistic");
-  const [scene, setScene]           = useState("Sunset Beach");
-  const [duration, setDuration]     = useState("15 seconds");
+  const [selectedArtStyle, setSelectedArtStyle] = useState("Realistic");
+  const [customArtStyle, setCustomArtStyle] = useState("");
+  const [useCustomArtStyle, setUseCustomArtStyle] = useState(false);
+  const [selectedScene, setSelectedScene] = useState("Sunset Beach");
+  const [customScene, setCustomScene] = useState("");
+  const [useCustomScene, setUseCustomScene] = useState(false);
+  const [duration, setDuration]     = useState("10 seconds");
+  const [quality, setQuality]       = useState("High (1080p)");
   const [ratio, setRatio]           = useState("9:16 (Vertical)");
   const [speed, setSpeed]           = useState(50);
-  const [captions, setCaptions]     = useState(true);
-  const [music, setMusic]           = useState(true);
-  const [hashtags, setHashtags]     = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState(false);
   const [videoUrl, setVideoUrl]     = useState(null);
+  const [imageUrl, setImageUrl]     = useState(null);
+  const [generatedHashtags, setGeneratedHashtags] = useState([]);
+  const [generatedCaption, setGeneratedCaption] = useState("");
+  const [settingsApplied, setSettingsApplied] = useState(null);
   const [error, setError]           = useState(null);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [showQuickTips, setShowQuickTips] = useState(true);
+  const [focusPromptOnCreate, setFocusPromptOnCreate] = useState(true);
+  const [captions, setCaptions] = useState(false);
+  const [hashtags, setHashtags] = useState(false);
+  const [music, setMusic] = useState(false);
+  const promptRef = useRef(null);
 
-  // Simulate step progress during generation
-  const startStepTimer = () => {
-    const timings = [6000, 14000, 45000, 20000]; // ms per step
-    let step = 0;
-    const advance = () => {
-      step += 1;
-      setLoadingStep(step);
-      if (step < LOADING_STEPS.length - 1) {
-        setTimeout(advance, timings[step] || 10000);
+  const artStyle = useCustomArtStyle && customArtStyle.trim() ? customArtStyle.trim() : selectedArtStyle;
+  const scene = useCustomScene && customScene.trim() ? customScene.trim() : selectedScene;
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch(buildApiUrl("/api/settings"));
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const settings = data.settings || {};
+
+        if (typeof settings.artStyle === "string") {
+          const presetNames = ART_STYLES.map((style) => style.name);
+          if (presetNames.includes(settings.artStyle)) {
+            setSelectedArtStyle(settings.artStyle);
+            setCustomArtStyle("");
+            setUseCustomArtStyle(false);
+          } else if (settings.artStyle.trim()) {
+            setCustomArtStyle(settings.artStyle.trim());
+            setUseCustomArtStyle(true);
+            setSelectedArtStyle("");
+          }
+        }
+
+        if (typeof settings.duration === "string") setDuration(settings.duration);
+        if (typeof settings.quality === "string") setQuality(settings.quality);
+        if (typeof settings.autoCaptions === "boolean") setCaptions(settings.autoCaptions);
+        if (typeof settings.autoHashtags === "boolean") setHashtags(settings.autoHashtags);
+        if (typeof settings.bgMusic === "boolean") setMusic(settings.bgMusic);
+        if (typeof settings.showQuickTips === "boolean") setShowQuickTips(settings.showQuickTips);
+        if (typeof settings.focusPromptOnCreate === "boolean") setFocusPromptOnCreate(settings.focusPromptOnCreate);
+      } catch {
+        // Keep the built-in defaults if settings cannot be loaded.
       }
     };
-    setTimeout(advance, timings[0]);
+
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    const onSettingsUpdated = (event) => {
+      const settings = event?.detail;
+      if (!settings) return;
+
+      if (typeof settings.artStyle === "string") {
+        const presetNames = ART_STYLES.map((style) => style.name);
+        if (presetNames.includes(settings.artStyle)) {
+          setSelectedArtStyle(settings.artStyle);
+          setCustomArtStyle("");
+          setUseCustomArtStyle(false);
+        } else if (settings.artStyle.trim()) {
+          setCustomArtStyle(settings.artStyle.trim());
+          setUseCustomArtStyle(true);
+          setSelectedArtStyle("");
+        }
+      }
+
+      if (typeof settings.duration === "string") setDuration(settings.duration);
+      if (typeof settings.quality === "string") setQuality(settings.quality);
+      if (typeof settings.autoCaptions === "boolean") setCaptions(settings.autoCaptions);
+      if (typeof settings.autoHashtags === "boolean") setHashtags(settings.autoHashtags);
+      if (typeof settings.bgMusic === "boolean") setMusic(settings.bgMusic);
+      if (typeof settings.showQuickTips === "boolean") setShowQuickTips(settings.showQuickTips);
+      if (typeof settings.focusPromptOnCreate === "boolean") setFocusPromptOnCreate(settings.focusPromptOnCreate);
+    };
+
+    window.addEventListener("settings-updated", onSettingsUpdated);
+    return () => window.removeEventListener("settings-updated", onSettingsUpdated);
+  }, []);
+
+  useEffect(() => {
+    if (focusPromptOnCreate && promptRef.current) {
+      promptRef.current.focus();
+    }
+  }, [focusPromptOnCreate]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("selectedTemplateDraft");
+    if (!raw) return;
+
+    try {
+      const draft = JSON.parse(raw);
+
+      if (typeof draft.prompt === "string") setPrompt(draft.prompt);
+
+      if (typeof draft.artStyle === "string" && draft.artStyle.trim()) {
+        const styleValue = draft.artStyle.trim();
+        const presetNames = ART_STYLES.map((item) => item.name);
+        if (presetNames.includes(styleValue)) {
+          setSelectedArtStyle(styleValue);
+          setUseCustomArtStyle(false);
+          setCustomArtStyle("");
+        } else {
+          setUseCustomArtStyle(true);
+          setCustomArtStyle(styleValue);
+          setSelectedArtStyle("");
+        }
+      }
+
+      if (typeof draft.scene === "string" && draft.scene.trim()) {
+        const sceneValue = draft.scene.trim();
+        if (SCENES.includes(sceneValue)) {
+          setSelectedScene(sceneValue);
+          setUseCustomScene(false);
+          setCustomScene("");
+        } else {
+          setUseCustomScene(true);
+          setCustomScene(sceneValue);
+          setSelectedScene("");
+        }
+      }
+
+      if (["5 seconds", "10 seconds", "15 seconds"].includes(draft.duration)) {
+        setDuration(draft.duration);
+      }
+      if (["High (1080p)", "Medium (720p)", "Low (480p)"].includes(draft.quality)) {
+        setQuality(draft.quality);
+      }
+      if (["9:16 (Vertical)", "16:9 (Horizontal)", "1:1 (Square)"].includes(draft.ratio)) {
+        setRatio(draft.ratio);
+      }
+      if (Number.isFinite(Number(draft.speed))) {
+        const clampedSpeed = Math.max(0, Math.min(100, Number(draft.speed)));
+        setSpeed(clampedSpeed);
+      }
+
+      if (typeof draft.autoCaptions === "boolean") setCaptions(draft.autoCaptions);
+      if (typeof draft.autoHashtags === "boolean") setHashtags(draft.autoHashtags);
+      if (typeof draft.bgMusic === "boolean") setMusic(draft.bgMusic);
+    } catch {
+      // Ignore malformed template drafts.
+    } finally {
+      localStorage.removeItem("selectedTemplateDraft");
+    }
+  }, []);
+
+  const handlePickArtStyle = (style) => {
+    setSelectedArtStyle(style);
+    setCustomArtStyle("");
   };
+
+  const handlePickScene = (value) => {
+    setSelectedScene(value);
+    setCustomScene("");
+  };
+
+  useEffect(() => {
+    const unsubscribe = subscribeGeneration((job) => {
+      if (job.status === "running") {
+        setGenerating(true);
+        setGenerated(false);
+        setVideoUrl(null);
+        setImageUrl(null);
+        setGeneratedHashtags([]);
+        setGeneratedCaption("");
+        setSettingsApplied(null);
+        setError(null);
+        setLoadingStep(getLoadingStepFromElapsed(job.startedAt));
+        return;
+      }
+
+      if (job.status === "success") {
+        const data = job.result || {};
+        setGenerating(false);
+        setVideoUrl(data.videoUrl || null);
+        setImageUrl(data.imageUrl || null);
+        setGeneratedHashtags(Array.isArray(data.hashtags) ? data.hashtags : []);
+        setGeneratedCaption(typeof data.caption === "string" ? data.caption : "");
+        setSettingsApplied(data.settingsApplied || null);
+        setGenerated(Boolean(data.videoUrl || data.imageUrl));
+        setLoadingStep(LOADING_STEPS.length);
+        setError(null);
+        return;
+      }
+
+      if (job.status === "error") {
+        const fallbackHint = API_BASE_URL
+          ? "Check that REACT_APP_API_BASE_URL is reachable and backend is running."
+          : "Check that backend is running on port 5000 and react-scripts proxy is active.";
+
+        setGenerating(false);
+        setVideoUrl(null);
+        setImageUrl(null);
+        setGenerated(false);
+        setLoadingStep(0);
+        setError(`Reel generation failed. Details: ${job.error || "Unknown network error"}. ${fallbackHint}`);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!generating) return;
+
+    const intervalId = setInterval(() => {
+      setLoadingStep(getLoadingStepFromElapsed(getGenerationState().startedAt));
+    }, 600);
+
+    return () => clearInterval(intervalId);
+  }, [generating]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -147,10 +374,12 @@ export default function Create() {
     setGenerating(true);
     setGenerated(false);
     setVideoUrl(null);
+    setImageUrl(null);
+    setGeneratedHashtags([]);
+    setGeneratedCaption("");
+    setSettingsApplied(null);
     setError(null);
     setLoadingStep(0);
-
-    startStepTimer();
 
     // Map ratio string → short key for n8n
     const aspectRatioMap = {
@@ -159,52 +388,78 @@ export default function Create() {
       "1:1 (Square)":      "square",
     };
 
+    const payload = {
+      prompt,
+      theme:       scene,
+      style:       artStyle,
+      mood:        "cinematic",
+      sceneCount:  durationToSceneCount(duration),
+      reelDurationSeconds: durationToSeconds(duration),
+      sceneLength: durationToSeconds(duration) / durationToSceneCount(duration),
+      aspectRatio: aspectRatioMap[ratio] || "portrait",
+      speed,
+      quality,
+    };
+
     try {
-      const res = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          theme:       scene,
-          style:       artStyle,
-          mood:        "cinematic",
-          sceneCount:  durationToSceneCount(duration),
-          sceneLength: 3,
-          aspectRatio: aspectRatioMap[ratio] || "portrait",
-          captions,
-          music,
-          hashtags,
-          speed,
-        }),
+      await startGeneration({
+        payload,
+        generateUrl: GENERATE_URL,
+        timeoutMs: REQUEST_TIMEOUT_MS,
       });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Webhook error ${res.status}: ${text.slice(0, 200)}`);
-      }
-
-      const data = await res.json();
-
-      if (data.success && data.videoUrl) {
-        setVideoUrl(data.videoUrl);
-        setGenerated(true);
-        setLoadingStep(LOADING_STEPS.length); // all done
-      } else {
-        throw new Error(data.error || "n8n returned an unexpected response");
-      }
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setGenerating(false);
+      setImageUrl(null);
+      setVideoUrl(null);
+      setGenerated(false);
+      setLoadingStep(0);
+      setGeneratedCaption("");
+
+      const fallbackHint = API_BASE_URL
+        ? "Check that REACT_APP_API_BASE_URL is reachable and backend is running."
+        : "Check that backend is running on port 5000 and react-scripts proxy is active.";
+
+      const reason = err?.name === "AbortError"
+        ? `Request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s`
+        : err?.message || "Unknown network error";
+
+      setError(`Reel generation failed. Details: ${reason}. ${fallbackHint}`);
     }
   };
 
   const handleDownload = () => {
-    if (!videoUrl) return;
-    const a = document.createElement("a");
-    a.href = videoUrl;
-    a.download = `reel_${scene.replace(/\s/g, "_")}_${Date.now()}.mp4`;
-    a.click();
+    const sourceUrl = resolveBackendUrl(videoUrl || imageUrl);
+    if (!sourceUrl) return;
+
+    const filename = videoUrl
+      ? `reel_${scene.replace(/\s/g, "_")}_${Date.now()}.mp4`
+      : `reel_preview_${scene.replace(/\s/g, "_")}_${Date.now()}.jpg`;
+
+    fetch(sourceUrl)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Download failed with status ${response.status}`);
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      })
+      .catch(() => {
+        const link = document.createElement("a");
+        link.href = sourceUrl;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      });
   };
 
   return (
@@ -218,29 +473,31 @@ export default function Create() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
 
         {/* ── Left Panel ── */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", borderTop: "4px solid #1DB5E6" }}>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            <span style={{ color: "#7c3aed", fontSize: 20 }}>✦</span>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1a1a2e" }}>Create New Reel</h2>
+            <span style={{ color: "#1DB5E6", fontSize: 20 }}>✦</span>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: "#1E3A8A" }}>Create New Reel</h2>
           </div>
-          <p style={{ margin: "0 0 28px", color: "#6b7280", fontSize: 14 }}>
+
+          <p style={{ margin: "0 0 28px", color: "#1E40AF", fontSize: 14, fontWeight: 600 }}>
             Describe your vision and let AI bring it to life
           </p>
 
           {/* Prompt */}
-          <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#1a1a2e", marginBottom: 8 }}>
+          <label style={{ display: "block", fontWeight: 700, fontSize: 14, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
             Prompt <span style={{ color: "#ef4444" }}>*</span>
           </label>
           <textarea
+            ref={promptRef}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Describe your reel... e.g., 'A serene meditation journey through nature with peaceful music and inspiring captions'"
             style={{
               width: "100%", minHeight: 100, padding: "14px 16px",
-              background: "#fefce8", border: "1px solid #e5e7eb", borderRadius: 10,
+              background: "#f0f7ff", border: "2px solid #1DB5E6", borderRadius: 10,
               fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none",
-              color: "#1a1a2e", lineHeight: 1.6, boxSizing: "border-box", marginBottom: 28,
+              color: "#1E3A8A", lineHeight: 1.6, boxSizing: "border-box", marginBottom: 28, fontWeight: 500,
             }}
           />
 
@@ -252,11 +509,14 @@ export default function Create() {
             {ART_STYLES.map((s) => (
               <div
                 key={s.name}
-                onClick={() => setArtStyle(s.name)}
+                onClick={() => handlePickArtStyle(s.name)}
                 style={{
                   borderRadius: 12, overflow: "hidden", cursor: "pointer",
-                  border: `2px solid ${artStyle === s.name ? "#7c3aed" : "transparent"}`,
+                  border: `2px solid ${artStyle === s.name ? "#1DB5E6" : "transparent"}`, boxShadow: artStyle === s.name ? "0 0 12px rgba(29, 181, 230, 0.4)" : "none",
                   position: "relative",
+                  boxShadow: artStyle === s.name ? "0 10px 24px rgba(124,58,237,0.14)" : "0 1px 4px rgba(15,23,42,0.08)",
+                  transform: artStyle === s.name ? "translateY(-2px)" : "none",
+                  transition: "all 0.18s ease",
                 }}
               >
                 <img src={s.thumb} alt={s.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
@@ -264,7 +524,7 @@ export default function Create() {
                   <div style={{
                     position: "absolute", top: 4, right: 4,
                     width: 20, height: 20, borderRadius: "50%",
-                    background: "#7c3aed", display: "flex", alignItems: "center",
+                    background: "linear-gradient(135deg, #1DB5E6, #2563EB)", display: "flex", alignItems: "center",
                     justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700,
                   }}>✓</div>
                 )}
@@ -286,13 +546,16 @@ export default function Create() {
             {SCENES.map((s) => (
               <div
                 key={s}
-                onClick={() => setScene(s)}
+                onClick={() => handlePickScene(s)}
                 style={{
                   padding: "20px 12px", borderRadius: 10, textAlign: "center",
-                  cursor: "pointer", fontSize: 14, color: "#1a1a2e",
-                  border: `1.5px solid ${scene === s ? "#7c3aed" : "#e5e7eb"}`,
-                  background: scene === s ? "#f5f3ff" : "#fff",
-                  fontWeight: scene === s ? 600 : 400, transition: "all 0.15s",
+                  cursor: "pointer", fontSize: 14, color: "#1E3A8A", fontWeight: 600,
+                  border: `2px solid ${scene === s ? "#1DB5E6" : "#cbd5e1"}`,
+                  background: scene === s ? "#E0F2FE" : "#fff",
+                  fontWeight: scene === s ? 700 : 500,
+                  boxShadow: scene === s ? "0 10px 20px rgba(124,58,237,0.12)" : "0 1px 4px rgba(15,23,42,0.05)",
+                  transform: scene === s ? "translateY(-1px)" : "none",
+                  transition: "all 0.18s ease",
                 }}
               >{s}</div>
             ))}
@@ -301,22 +564,82 @@ export default function Create() {
           {/* Customization Options */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
             <span style={{ fontSize: 16 }}>⚙</span>
-            <h3 style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#1a1a2e" }}>Customization Options</h3>
+            <h3 style={{ margin: 0, fontWeight: 900, fontSize: 16, color: "#1E3A8A" }}>Customization Options</h3>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 18 }}>
+            <label style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>Use custom scene / setting</label>
+            <input
+              type="checkbox"
+              checked={useCustomScene}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setUseCustomScene(checked);
+                if (!checked) {
+                  setCustomScene("");
+                } else {
+                  setSelectedScene("");
+                }
+              }}
+            />
+            {useCustomScene && (
+              <input
+                placeholder="Enter custom scene or setting"
+                value={customScene}
+                onChange={(e) => {
+                  setCustomScene(e.target.value);
+                  if (e.target.value.trim()) {
+                    setSelectedScene("");
+                  }
+                }}
+                style={{ flex: 1, padding: 10, borderRadius: 12, border: '2px solid #1DB5E6', background: '#f0f7ff', fontWeight: 500, color: '#1E3A8A' }}
+              />
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 18 }}>
+            <label style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>Use custom art style</label>
+            <input
+              type="checkbox"
+              checked={useCustomArtStyle}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setUseCustomArtStyle(checked);
+                if (!checked) {
+                  setCustomArtStyle("");
+                } else {
+                  setSelectedArtStyle("");
+                }
+              }}
+            />
+            {useCustomArtStyle && (
+              <input
+                placeholder="Enter custom art style"
+                value={customArtStyle}
+                onChange={(e) => {
+                  setCustomArtStyle(e.target.value);
+                  if (e.target.value.trim()) {
+                    setSelectedArtStyle("");
+                  }
+                }}
+                style={{ flex: 1, padding: 10, borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff' }}
+              />
+            )}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
                 Video Duration
               </label>
               <SelectInput
                 value={duration}
-                options={["15 seconds", "30 seconds", "45 seconds", "60 seconds"]}
+                options={["5 seconds", "10 seconds", "15 seconds"]}
                 onChange={setDuration}
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
                 Aspect Ratio
               </label>
               <SelectInput
@@ -327,31 +650,31 @@ export default function Create() {
             </div>
           </div>
 
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 8, letterSpacing: "0.5px" }}>
+              Quality
+            </label>
+            <SelectInput
+              value={quality}
+              options={["High (1080p)", "Medium (720p)", "Low (480p)"]}
+              onChange={setQuality}
+            />
+          </div>
+
           {/* Speed Slider */}
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E3A8A", marginBottom: 10, letterSpacing: "0.5px" }}>
             Animation Speed
           </label>
           <input
             type="range" min={0} max={100} value={speed}
             onChange={(e) => setSpeed(+e.target.value)}
-            style={{ width: "100%", accentColor: "#1a1a2e", marginBottom: 4 }}
+            style={{ width: "100%", accentColor: "#1DB5E6", marginBottom: 4 }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>Slow</span>
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>Fast</span>
+            <span style={{ fontSize: 12, color: "#1E40AF", fontWeight: 600 }}>Slow</span>
+            <span style={{ fontSize: 12, color: "#1E40AF", fontWeight: 600 }}>Fast</span>
           </div>
 
-          {/* Toggles */}
-          {[
-            ["Auto-generate Caption", captions,  setCaptions],
-            ["Add Background Music",  music,     setMusic],
-            ["Generate Hashtags",     hashtags,  setHashtags],
-          ].map(([label, val, setter]) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: "#1a1a2e", fontWeight: 500 }}>{label}</span>
-              <Toggle on={val} onChange={setter} />
-            </div>
-          ))}
 
           {/* Generate Button */}
           <button
@@ -360,13 +683,13 @@ export default function Create() {
             style={{
               width: "100%", padding: "15px", marginTop: 8, border: "none", borderRadius: 12,
               background: prompt.trim() && !generating
-                ? "linear-gradient(135deg,#7c3aed,#3b82f6)"
-                : "#e5e7eb",
+                ? "linear-gradient(135deg, #1DB5E6, #2563EB)"
+                : "#cbd5e1",
               color: prompt.trim() && !generating ? "#fff" : "#9ca3af",
-              fontWeight: 700, fontSize: 16,
+              fontWeight: 900, fontSize: 16,
               cursor: prompt.trim() && !generating ? "pointer" : "not-allowed",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: prompt.trim() && !generating ? "0 4px 16px rgba(124,58,237,0.35)" : "none",
+              boxShadow: prompt.trim() && !generating ? "0 4px 16px rgba(29, 181, 230, 0.4)" : "none",
               transition: "all 0.2s",
             }}
           >
@@ -376,9 +699,9 @@ export default function Create() {
           {/* Error Message */}
           {error && (
             <div style={{
-              marginTop: 14, padding: "12px 16px", background: "#fef2f2",
-              border: "1px solid #fecaca", borderRadius: 10,
-              fontSize: 13, color: "#dc2626", lineHeight: 1.5,
+              marginTop: 14, padding: "12px 16px", background: "#fee2e2",
+              border: "2px solid #fca5a5", borderRadius: 10,
+              fontSize: 13, color: "#dc2626", lineHeight: 1.5, fontWeight: 600,
             }}>
               ❌ <strong>Error:</strong> {error}
             </div>
@@ -389,16 +712,16 @@ export default function Create() {
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* Preview */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", flex: 1 }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#1a1a2e" }}>Preview</h3>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Your generated reel will appear here</p>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", flex: 1, borderTop: "4px solid #1DB5E6" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 900, color: "#1E3A8A" }}>Preview</h3>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#1E40AF", fontWeight: 600 }}>Your generated result will appear here</p>
 
             <div style={{
-              border: `2px dashed ${generating ? "#7c3aed" : "#e5e7eb"}`,
+              border: `2px dashed ${generating ? "#1DB5E6" : "#cbd5e1"}`,
               borderRadius: 12, aspectRatio: "9/16",
               display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", gap: 12,
-              background: generating ? "#faf5ff" : "#f9fafb",
+              background: generating ? "#E0F2FE" : "#f0f7ff",
               overflow: "hidden", transition: "all 0.3s", position: "relative",
             }}>
 
@@ -422,7 +745,7 @@ export default function Create() {
                     animation: "shimmer 1.5s infinite", textAlign: "center",
                     padding: "0 16px",
                   }}>
-                    This may take 1–2 minutes...
+                      Usually finishes in under 2 minutes...
                   </p>
                 </div>
               )}
@@ -443,6 +766,19 @@ export default function Create() {
                 />
               )}
 
+              {/* State: Done -> show image fallback */}
+              {!generating && generated && !videoUrl && imageUrl && (
+                <img
+                  src={imageUrl}
+                  alt="Generated preview"
+                  style={{
+                    width: "100%", height: "100%",
+                    objectFit: "cover", borderRadius: 10,
+                    display: "block",
+                  }}
+                />
+              )}
+
               {/* State: Idle */}
               {!generating && !generated && (
                 <>
@@ -455,7 +791,7 @@ export default function Create() {
             </div>
 
             {/* Download + Regenerate buttons — shown after success */}
-            {generated && videoUrl && !generating && (
+            {generated && (videoUrl || imageUrl) && !generating && (
               <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
                 <button
                   onClick={handleDownload}
@@ -469,6 +805,7 @@ export default function Create() {
                 >
                   ⬇ Download
                 </button>
+
                 <button
                   onClick={handleGenerate}
                   style={{
@@ -482,29 +819,68 @@ export default function Create() {
                 </button>
               </div>
             )}
+
+            {generated && settingsApplied && !generating && (
+              <div style={{ marginTop: 14, padding: "10px 12px", background: "#f9fafb", borderRadius: 10, border: "1px solid #e5e7eb" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 12, color: "#374151", fontWeight: 600 }}>Applied Settings</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>
+                  {settingsApplied.sceneCount} scenes • style: {settingsApplied.style || "default"} • setting: {settingsApplied.theme || "auto"}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>
+                  captions: {settingsApplied.captions ? "on" : "off"} • music: {settingsApplied.music ? "on" : "off"} • speed: {settingsApplied.speed}
+                </p>
+              </div>
+            )}
+
+            {generated && generatedHashtags.length > 0 && !generating && (
+              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {generatedHashtags.map((tag) => (
+                  <span
+                    key={tag}
+                    style={{
+                      fontSize: 12,
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      background: "#eef2ff",
+                      color: "#4338ca",
+                      border: "1px solid #c7d2fe",
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {generated && generatedCaption && !generating && (
+              <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontSize: 12, lineHeight: 1.45 }}>
+                {generatedCaption}
+              </div>
+            )}
           </div>
 
-          {/* Quick Tips */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <span>💡</span>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#1a1a2e" }}>Quick Tips</h3>
-            </div>
-            {[
-              "Be specific in your prompt for better results",
-              "Mix different art styles for unique content",
-              "Preview before posting to ensure quality",
-            ].map((tip) => (
-              <div key={tip} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-                <span style={{
-                  background: "#f3f4f6", padding: "2px 8px", borderRadius: 6,
-                  fontSize: 11, fontWeight: 600, color: "#6b7280",
-                  flexShrink: 0, height: "fit-content",
-                }}>Tip</span>
-                <span style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5 }}>{tip}</span>
+          {showQuickTips && (
+            <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span>💡</span>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#1a1a2e" }}>Quick Tips</h3>
               </div>
-            ))}
-          </div>
+              {[
+                "Be specific in your prompt for better results",
+                "Mix different art styles for unique content",
+                "Preview before posting to ensure quality",
+              ].map((tip) => (
+                <div key={tip} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                  <span style={{
+                    background: "#f3f4f6", padding: "2px 8px", borderRadius: 6,
+                    fontSize: 11, fontWeight: 600, color: "#6b7280",
+                    flexShrink: 0, height: "fit-content",
+                  }}>Tip</span>
+                  <span style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5 }}>{tip}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

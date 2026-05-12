@@ -1,12 +1,30 @@
-export default function Navbar({ page, setPage }) {
-  const NAV = ["Dashboard", "Create", "Gallery", "Templates", "Settings"];
-  const ICONS = {
-    Dashboard: "⊞",
-    Create: "+",
-    Gallery: "🗂",
-    Templates: "▶",
-    Settings: "⚙",
-  };
+import { useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import logo from "../pages/logo.png";
+
+export default function Navbar({ generationStatus = "idle" }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const NAV = [
+    { name: "Create", path: "/create", icon: "+" },
+    { name: "Gallery", path: "/gallery", icon: "🗂" },
+    { name: "Templates", path: "/templates", icon: "▶" },
+    { name: "Settings", path: "/settings", icon: "⚙" },
+  ];
+
+  useEffect(() => {
+    const handleSettingsUpdate = (event) => {
+      const updatedSettings = event.detail;
+      if (updatedSettings) {
+        console.log("Settings updated:", updatedSettings);
+      }
+    };
+
+    window.addEventListener("settings-updated", handleSettingsUpdate);
+    return () => window.removeEventListener("settings-updated", handleSettingsUpdate);
+  }, []);
 
   return (
     <header
@@ -15,7 +33,8 @@ export default function Navbar({ page, setPage }) {
         top: 0,
         zIndex: 100,
         background: "#fff",
-        borderBottom: "1px solid #e5e7eb",
+        borderBottom: "2px solid #1DB5E6",
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
       }}
     >
       {/* Top bar */}
@@ -30,50 +49,79 @@ export default function Navbar({ page, setPage }) {
       >
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
+          <img
+            src={logo}
+            alt="Reelify Logo"
             style={{
               width: 40,
               height: 40,
               borderRadius: 10,
-              background: "linear-gradient(135deg,#7c3aed,#a855f7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
+              objectFit: "cover",
             }}
-          >
-            📹
-          </div>
+          />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a2e" }}>
-              Reel Generator
+            <div style={{ fontWeight: 900, fontSize: 18, color: "#1E3A8A", letterSpacing: "-0.5px" }}>
+              Reelify
             </div>
-            <div style={{ fontSize: 11, color: "#9ca3af" }}>
-              AI-Powered Video Creation
+            <div style={{ fontSize: 11, color: "#1E40AF", fontWeight: 600 }}>
+              AI Video Creation
             </div>
           </div>
         </div>
 
         {/* Quick Create button */}
-        <button
-          onClick={() => setPage("Create")}
-          style={{
-            padding: "10px 20px",
-            border: "none",
-            borderRadius: 10,
-            background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            boxShadow: "0 4px 12px rgba(124,58,237,0.35)",
-          }}
-        >
-          + Quick Create
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {generationStatus === "running" && (
+            <span
+              style={{
+                padding: "7px 10px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 700,
+                color: "white",
+                background: "linear-gradient(135deg, #1DB5E6, #2563EB)",
+                border: "2px solid #1E3A8A",
+              }}
+            >
+              Rendering...
+            </span>
+          )}
+          {user && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ color: "#1E3A8A", fontSize: "14px", fontWeight: "700", letterSpacing: "0.5px" }}>
+                Welcome, {user.username}
+              </span>
+              <button
+                onClick={() => {
+                  logout();
+                  navigate("/");
+                }}
+                style={{
+                  padding: "8px 16px",
+                  border: "2px solid #1DB5E6",
+                  borderRadius: 8,
+                  background: "white",
+                  color: "#1E3A8A",
+                  fontSize: "14px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  letterSpacing: "0.5px"
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#E0F2FE";
+                  e.target.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "white";
+                  e.target.style.transform = "translateY(0)";
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Nav tabs */}
@@ -86,29 +134,30 @@ export default function Navbar({ page, setPage }) {
           borderTop: "1px solid #f3f4f6",
         }}
       >
-        {NAV.map((n) => (
-          <button
-            key={n}
-            onClick={() => setPage(n)}
+        {NAV.map((item) => (
+          <Link
+            key={item.name}
+            to={item.path}
             style={{
               padding: "10px 20px",
               border: "none",
               borderRadius: "8px 8px 0 0",
               background: "transparent",
               cursor: "pointer",
-              color: page === n ? "#7c3aed" : "#6b7280",
-              fontWeight: page === n ? 600 : 400,
+              color: location.pathname === item.path ? "#1E3A8A" : "#6b7280",
+              fontWeight: location.pathname === item.path ? 600 : 400,
               fontSize: 14,
               display: "flex",
               alignItems: "center",
               gap: 6,
               borderBottom:
-                page === n ? "2px solid #7c3aed" : "2px solid transparent",
+                location.pathname === item.path ? "2px solid #1E3A8A" : "2px solid transparent",
               transition: "all 0.15s",
+              textDecoration: "none",
             }}
           >
-            <span>{ICONS[n]}</span> {n}
-          </button>
+            <span>{item.icon}</span> {item.name}
+          </Link>
         ))}
       </div>
     </header>

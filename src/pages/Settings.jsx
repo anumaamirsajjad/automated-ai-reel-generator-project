@@ -1,333 +1,384 @@
-import { useState } from "react";
-
-function Toggle({ on, onChange }) {
-  return (
-    <div
-      onClick={() => onChange(!on)}
-      style={{
-        width: 44, height: 24, borderRadius: 12, cursor: "pointer",
-        background: on ? "#1a1a2e" : "#d1d5db",
-        position: "relative", transition: "background 0.2s", flexShrink: 0,
-      }}
-    >
-      <div style={{
-        position: "absolute", top: 3, left: on ? 23 : 3,
-        width: 18, height: 18, borderRadius: "50%", background: "#fff",
-        transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
-      }} />
-    </div>
-  );
-}
-
-function SelectInput({ value, options, onChange }) {
-  return (
-    <div style={{ position: "relative" }}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: "100%", padding: "12px 16px", appearance: "none",
-          background: "#fefce8", border: "1px solid #e5e7eb", borderRadius: 8,
-          fontSize: 14, color: "#1a1a2e", cursor: "pointer",
-          outline: "none", fontFamily: "inherit",
-        }}
-      >
-        {options.map((o) => <option key={o}>{o}</option>)}
-      </select>
-      <div style={{
-        position: "absolute", right: 14, top: "50%",
-        transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280",
-      }}>▾</div>
-    </div>
-  );
-}
-
-function Section({ title, desc, children }) {
-  return (
-    <div style={{
-      background: "#fff", borderRadius: 16, padding: 28,
-      boxShadow: "0 1px 8px rgba(0,0,0,0.06)", marginBottom: 20,
-    }}>
-      <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#1a1a2e" }}>{title}</h2>
-      <p style={{ margin: "0 0 24px", fontSize: 13, color: "#9ca3af" }}>{desc}</p>
-      {children}
-    </div>
-  );
-}
-
-function ToggleRow({ label, desc, on, onChange }) {
-  return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "16px 0", borderBottom: "1px solid #f3f4f6",
-    }}>
-      <div>
-        <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#1a1a2e" }}>{label}</p>
-        {desc && <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{desc}</p>}
-      </div>
-      <Toggle on={on} onChange={onChange} />
-    </div>
-  );
-}
-
-function SocialRow({ icon, name, handle, connected, onToggle }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "16px 20px", border: "1px solid #f3f4f6",
-      borderRadius: 12, marginBottom: 10,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12,
-          background: "#f3f4f6", display: "flex",
-          alignItems: "center", justifyContent: "center", fontSize: 22,
-        }}>{icon}</div>
-        <div>
-          <p style={{ margin: "0 0 2px", fontWeight: 600, fontSize: 15, color: "#1a1a2e" }}>{name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-            {connected ? handle : "Not connected"}
-          </p>
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {connected && (
-          <span style={{
-            background: "#dcfce7", color: "#15803d",
-            padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-          }}>✓ Connected</span>
-        )}
-        <button
-          onClick={onToggle}
-          style={{
-            padding: "8px 18px", border: "1.5px solid #e5e7eb", borderRadius: 8,
-            background: "#fff", color: "#374151", fontWeight: 600,
-            fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >{connected ? "Disconnect" : "Connect"}</button>
-      </div>
-    </div>
-  );
-}
+import { useState, useEffect } from "react";
+import { buildApiUrl } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Settings() {
-  const [igConnected,   setIgConnected]   = useState(true);
-  const [fbConnected,   setFbConnected]   = useState(false);
-  const [ttConnected,   setTtConnected]   = useState(false);
-  const [ytConnected,   setYtConnected]   = useState(false);
+  const { user, login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [initialProfile, setInitialProfile] = useState({ email: "", username: "" });
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editingField, setEditingField] = useState(null); // 'email'|'username'|'avatar'|'password'
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
-  const [autoPost,      setAutoPost]      = useState(false);
-  const [crossPost,     setCrossPost]     = useState(true);
-  const [postTime,      setPostTime]      = useState("Post Immediately");
-  const [optimalTime,   setOptimalTime]   = useState("Auto (AI-optimized)");
+  const getStoredUser = () => user || JSON.parse(localStorage.getItem("user") || "null") || {};
+  const buildAuthHeaders = (token, includeJson = false) => {
+    const currentUser = getStoredUser();
+    const headers = {};
+    if (includeJson) headers["Content-Type"] = "application/json";
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (currentUser?.id) headers["X-User-Id"] = String(currentUser.id);
+    return headers;
+  };
 
-  const [artStyle,      setArtStyle]      = useState("Realistic");
-  const [duration,      setDuration]      = useState("15 seconds");
-  const [quality,       setQuality]       = useState("High (1080p)");
-  const [autoCaptions,  setAutoCaptions]  = useState(true);
-  const [autoHashtags,  setAutoHashtags]  = useState(true);
-  const [bgMusic,       setBgMusic]       = useState(true);
+  const resolveMediaUrl = (url) => {
+    if (!url) return null;
+    if (/^https?:\/\//i.test(url)) return url;
+    return buildApiUrl(url);
+  };
 
-  const [notifGen,      setNotifGen]      = useState(true);
-  const [notifSched,    setNotifSched]    = useState(true);
-  const [notifTemp,     setNotifTemp]     = useState(false);
+  useEffect(() => {
+    const loadProfile = async () => {
+      const token = localStorage.getItem("authToken");
+      const localUser = user || JSON.parse(localStorage.getItem("user") || "null") || {};
 
-  const [openaiKey,     setOpenaiKey]     = useState("");
-  const [stabilityKey,  setStabilityKey]  = useState("");
+      // Show known local values immediately so Settings never looks empty.
+      setEmail(localUser.email || "");
+      setUsername(localUser.username || "");
+      setInitialProfile({
+        email: localUser.email || "",
+        username: localUser.username || "",
+        profilePicture: localUser.profilePicture || null,
+      });
+      setAvatarPreview(resolveMediaUrl(localUser.profilePicture || null));
 
-  const [saved,         setSaved]         = useState(false);
+      if (!token) {
+        setLoadingProfile(false);
+        return;
+      }
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+      try {
+        const res = await fetch(buildApiUrl("/api/user"), {
+          method: "GET",
+          headers: buildAuthHeaders(token),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setMessage({ type: "error", text: err.error || err.message || "Could not refresh profile from server." });
+          return;
+        }
+        const data = await res.json();
+        const u = data.user || {};
+        setEmail(u.email || "");
+        setUsername(u.username || "");
+        setInitialProfile({ email: u.email || "", username: u.username || "", profilePicture: u.profilePicture || null });
+        setAvatarPreview(resolveMediaUrl(u.profilePicture || null));
+      } catch (err) {
+        setMessage({ type: "error", text: "Unable to load profile. Check backend connection." });
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+    loadProfile();
+  }, [user]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setMessage(null);
+    setSaving(true);
+
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      setMessage({ type: "error", text: "Not authenticated" });
+      setSaving(false);
+      return;
+    }
+
+    try {
+      // Update profile
+      const profileRes = await fetch(buildApiUrl("/api/user"), {
+        method: "PUT",
+        headers: buildAuthHeaders(token, true),
+        body: JSON.stringify({ email: email.trim(), username: username.trim() }),
+      });
+
+      const profileJson = await profileRes.json().catch(() => ({}));
+      if (!profileRes.ok) {
+        setMessage({ type: "error", text: profileJson.error || profileJson.message || "Failed to update profile" });
+        setSaving(false);
+        return;
+      }
+
+      // If password change requested
+      if (newPassword) {
+        if (newPassword !== confirmPassword) {
+          setMessage({ type: "error", text: "New password and confirmation do not match" });
+          setSaving(false);
+          return;
+        }
+
+        const pwRes = await fetch(buildApiUrl("/api/user/password"), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ currentPassword: currentPassword, newPassword: newPassword }),
+        });
+
+        const pwJson = await pwRes.json().catch(() => ({}));
+        if (!pwRes.ok) {
+          setMessage({ type: "error", text: pwJson.error || pwJson.message || "Failed to change password" });
+          setSaving(false);
+          return;
+        }
+      }
+
+      // Update auth context & localStorage user snapshot
+      const updatedUser = profileJson.user || { username, email };
+      const existingToken = localStorage.getItem("authToken");
+      try {
+        login(updatedUser, existingToken);
+      } catch {
+        // fallback: update localStorage manually
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+      }
+
+      setMessage({ type: "success", text: "Profile saved" });
+      const newPic = profileJson && profileJson.user && profileJson.user.profilePicture ? profileJson.user.profilePicture : initialProfile.profilePicture;
+      setInitialProfile({ email: updatedUser.email || email, username: updatedUser.username || username, profilePicture: newPic });
+      setAvatarPreview(resolveMediaUrl(newPic || avatarPreview));
+      setEditing(false);
+      setEditingField(null);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setMessage({ type: "error", text: "Unexpected error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEdit = () => {
+    setEditing(true);
+    setMessage(null);
+  };
+
+  const handleCancel = () => {
+    setEmail(initialProfile.email || "");
+    setUsername(initialProfile.username || "");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setMessage(null);
+    setEditing(false);
+    setEditingField(null);
+  };
+
+  const handleStartEditField = (field) => {
+    setEditing(true);
+    setEditingField(field);
+    setMessage(null);
+  };
+
+  const passwordStrength = (pw) => {
+    if (!pw) return { score: 0, label: 'Too short' };
+    let score = 0;
+    if (pw.length >= 8) score += 1;
+    if (/[0-9]/.test(pw)) score += 1;
+    if (/[A-Z]/.test(pw)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pw)) score += 1;
+    const labels = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
+    return { score, label: labels[Math.min(score, labels.length - 1)] };
   };
 
   return (
-    <div style={{ padding: "32px", maxWidth: 900, margin: "0 auto", animation: "fadeUp 0.4s ease" }}>
-      <style>{`@keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }`}</style>
+    <div style={{ padding: 28, maxWidth: 720, margin: "0 auto", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
+      <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, color: "#1E3A8A", letterSpacing: "-0.5px" }}>Profile</h1>
+      <p style={{ color: "#1E40AF", marginTop: 6, fontWeight: 600, fontSize: 15, letterSpacing: "0.5px" }}>Edit your email, name, and password.</p>
 
-      <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, color: "#1a1a2e" }}>Settings</h1>
-      <p style={{ margin: "0 0 28px", color: "#6b7280", fontSize: 14 }}>
-        Manage your account and integration preferences
-      </p>
-
-      {/* ── Social Media Accounts ── */}
-      <Section
-        title="Social Media Accounts"
-        desc="Connect your social media accounts to enable automated posting"
-      >
-        <SocialRow icon="📸" name="Instagram"      handle="@your_username" connected={igConnected} onToggle={() => setIgConnected(!igConnected)} />
-        <SocialRow icon="👤" name="Facebook"        handle=""               connected={fbConnected} onToggle={() => setFbConnected(!fbConnected)} />
-        <SocialRow icon="🎵" name="TikTok"          handle=""               connected={ttConnected} onToggle={() => setTtConnected(!ttConnected)} />
-        <SocialRow icon="▶️" name="YouTube Shorts"  handle=""               connected={ytConnected} onToggle={() => setYtConnected(!ytConnected)} />
-      </Section>
-
-      {/* ── Posting Preferences ── */}
-      <Section
-        title="Posting Preferences"
-        desc="Configure how and when your content is posted"
-      >
-        <ToggleRow
-          label="Auto-post After Generation"
-          desc="Automatically post reels immediately after generation"
-          on={autoPost} onChange={setAutoPost}
-        />
-        <div style={{ marginTop: 16, marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Default Posting Time
-          </label>
-          <SelectInput
-            value={postTime}
-            options={["Post Immediately", "Schedule for Later", "Best Time (AI)"]}
-            onChange={setPostTime}
-          />
+      {loadingProfile && (
+        <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#E0F2FE", color: "#1E3A8A", fontWeight: 600 }}>
+          Loading profile...
         </div>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Optimal Posting Time
-          </label>
-          <SelectInput
-            value={optimalTime}
-            options={["Auto (AI-optimized)", "Morning (8-10 AM)", "Afternoon (12-2 PM)", "Evening (6-8 PM)"]}
-            onChange={setOptimalTime}
-          />
-        </div>
-        <ToggleRow
-          label="Cross-post to All Platforms"
-          desc="Post to all connected platforms simultaneously"
-          on={crossPost} onChange={setCrossPost}
-        />
-      </Section>
+      )}
 
-      {/* ── Generation Settings ── */}
-      <Section
-        title="Generation Settings"
-        desc="Customize default generation parameters"
-      >
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Default Art Style
-          </label>
-          <SelectInput
-            value={artStyle}
-            options={["Realistic", "Anime", "Fantasy Art", "Cyberpunk", "Watercolor", "Sketch"]}
-            onChange={setArtStyle}
-          />
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Default Video Duration
-          </label>
-          <SelectInput
-            value={duration}
-            options={["15 seconds", "30 seconds", "45 seconds", "60 seconds"]}
-            onChange={setDuration}
-          />
-        </div>
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Video Quality
-          </label>
-          <SelectInput
-            value={quality}
-            options={["High (1080p)", "Medium (720p)", "Low (480p)"]}
-            onChange={setQuality}
-          />
-        </div>
-        <ToggleRow label="Auto-generate Captions" desc="Automatically create captions for all reels"  on={autoCaptions} onChange={setAutoCaptions} />
-        <ToggleRow label="Auto-generate Hashtags" desc="Add relevant hashtags to increase reach"       on={autoHashtags} onChange={setAutoHashtags} />
-        <ToggleRow label="Add Background Music"   desc="Include royalty-free music by default"         on={bgMusic}      onChange={setBgMusic}      />
-      </Section>
-
-      {/* ── Notifications ── */}
-      <Section
-        title="Notifications"
-        desc="Choose what updates you want to receive"
-      >
-        <ToggleRow label="🔔 Generation Complete"      desc="Notify when reel generation is finished"          on={notifGen}   onChange={setNotifGen}   />
-        <ToggleRow label="🕐 Scheduled Post Reminders" desc="Get reminded before scheduled posts go live"      on={notifSched} onChange={setNotifSched} />
-        <ToggleRow label="🧩 New Templates"            desc="Get notified about new template releases"         on={notifTemp}  onChange={setNotifTemp}  />
-      </Section>
-
-      {/* ── API Configuration ── */}
-      <Section
-        title="API Configuration"
-        desc="Configure external API keys for image generation (Optional)"
-      >
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            OpenAI API Key
-          </label>
-          <input
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-            placeholder="sk-YOUR_API_KEY_HERE"
-            style={{
-              width: "100%", padding: "12px 16px",
-              background: "#fefce8", border: "1px solid #e5e7eb",
-              borderRadius: 8, fontSize: 13, fontFamily: "monospace",
-              outline: "none", boxSizing: "border-box",
-            }}
-          />
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: "#9ca3af" }}>
-            Used for advanced AI image generation (optional)
-          </p>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-            Stability AI API Key
-          </label>
-          <input
-            value={stabilityKey}
-            onChange={(e) => setStabilityKey(e.target.value)}
-            placeholder="sk-..."
-            style={{
-              width: "100%", padding: "12px 16px",
-              background: "#fefce8", border: "1px solid #e5e7eb",
-              borderRadius: 8, fontSize: 13, fontFamily: "monospace",
-              outline: "none", boxSizing: "border-box",
-            }}
-          />
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: "#9ca3af" }}>
-            Alternative image generation service (optional)
-          </p>
-        </div>
-
-        {/* Warning box */}
-        <div style={{
-          background: "#fefce8", border: "1px solid #fde68a",
-          borderRadius: 10, padding: "12px 16px",
-          display: "flex", alignItems: "flex-start", gap: 10,
-        }}>
-          <span style={{ color: "#d97706", fontSize: 16, flexShrink: 0 }}>⚠</span>
-          <p style={{ margin: 0, fontSize: 13, color: "#92400e" }}>
-            API keys are stored securely and never shared. The app works with mock data by default.
-          </p>
-        </div>
-      </Section>
-
-      {/* ── Save / Reset Buttons ── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
-        <button style={{
-          padding: "11px 24px", border: "1.5px solid #e5e7eb", borderRadius: 10,
-          background: "#fff", color: "#374151", fontWeight: 600,
-          fontSize: 14, cursor: "pointer", fontFamily: "inherit",
-        }}>Reset to Defaults</button>
-
-        <button
-          onClick={handleSave}
+      {message && (
+        <div
           style={{
-            padding: "11px 24px", border: "none", borderRadius: 10,
-            background: saved
-              ? "linear-gradient(135deg,#22c55e,#16a34a)"
-              : "linear-gradient(135deg,#7c3aed,#6d28d9)",
-            color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 8,
-            fontFamily: "inherit", transition: "background 0.3s",
+            marginTop: 12,
+            padding: 10,
+            borderRadius: 8,
+            background: message.type === "error" ? "#fee2e2" : "#ecfdf5",
+            color: message.type === "error" ? "#991b1b" : "#065f46",
+            border: message.type === "error" ? "2px solid #fca5a5" : "2px solid #a7f3d0",
+            fontWeight: 600,
+            fontSize: 14
           }}
-        >{saved ? "✓ Saved!" : "💾 Save Changes"}</button>
+        >
+          {message.text}
+        </div>
+      )}
+
+      <div style={{ marginTop: 20, display: 'grid', gap: 12 }}>
+        {/* Avatar */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ width: 88, height: 88, borderRadius: 12, overflow: 'hidden', background: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #1DB5E6' }}>
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ fontSize: 28 }}>🙂</div>
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Profile Picture</div>
+            <div style={{ marginTop: 6 }}>
+              <button type="button" onClick={() => handleStartEditField('avatar')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Edit</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Email */}
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Gmail</div>
+            <div style={{ fontSize: 15, color: '#111827', marginTop: 6, fontWeight: 600 }}>{initialProfile.email || email || '—'}</div>
+          </div>
+          <div>
+            <button type="button" onClick={() => handleStartEditField('email')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Edit</button>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Name</div>
+            <div style={{ fontSize: 15, color: '#111827', marginTop: 6, fontWeight: 600 }}>{initialProfile.username || username || '—'}</div>
+          </div>
+          <div>
+            <button type="button" onClick={() => handleStartEditField('username')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Edit</button>
+          </div>
+        </div>
+
+        {/* Password */}
+        <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Password</div>
+            <div style={{ fontSize: 15, color: '#111827', marginTop: 6, fontWeight: 600 }}>••••••••</div>
+          </div>
+          <div>
+            <button type="button" onClick={() => handleStartEditField('password')} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A', letterSpacing: '0.5px' }}>Change Password</button>
+          </div>
+        </div>
+
+        {/* Editing panels */}
+            {editingField === 'avatar' && (
+              <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+                <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Upload Profile Picture</label>
+                <input type="file" accept="image/*" onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const url = URL.createObjectURL(f);
+                  setAvatarPreview(url);
+                  setAvatarFile(f);
+                  setMessage(null);
+                }} style={{ marginTop: 8 }} />
+                {avatarPreview && (
+                  <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div style={{ width: 88, height: 88, borderRadius: 8, overflow: 'hidden', background: '#E0F2FE', border: '2px solid #1DB5E6' }}>
+                      <img src={avatarPreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(resolveMediaUrl(initialProfile.profilePicture || null)); setEditingField(null); }} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
+                      <button type="button" onClick={async () => {
+                        if (!avatarFile) { setMessage({ type: 'error', text: 'Select an image first' }); return; }
+                        const token = localStorage.getItem('authToken');
+                        if (!token) { setMessage({ type: 'error', text: 'Not authenticated' }); return; }
+                        const form = new FormData(); form.append('file', avatarFile, avatarFile.name);
+                        setSaving(true); setMessage(null);
+                        try {
+                          const res = await fetch(buildApiUrl('/api/user/avatar'), { method: 'POST', headers: buildAuthHeaders(token), body: form });
+                          const j = await res.json().catch(()=>({}));
+                          if (!res.ok) { setMessage({ type: 'error', text: j.error || 'Upload failed' }); return; }
+                          const pic = j.profilePicture;
+                          setAvatarPreview(resolveMediaUrl(pic));
+                          const existingToken = localStorage.getItem('authToken');
+                          const curUser = JSON.parse(localStorage.getItem('user') || '{}');
+                          const updatedUser = { ...curUser, profilePicture: pic };
+                          try { login(updatedUser, existingToken); } catch { localStorage.setItem('user', JSON.stringify(updatedUser)); }
+                          setInitialProfile(prev => ({ ...prev, profilePicture: pic }));
+                          setMessage({ type: 'success', text: 'Avatar uploaded' });
+                          setAvatarFile(null);
+                          setEditingField(null);
+                        } catch (err) { setMessage({ type: 'error', text: 'Upload failed' }); }
+                        finally { setSaving(false); }
+                      }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Upload</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+        {editingField === 'email' && (
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+            <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Gmail (email)</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
+              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        )}
+
+        {editingField === 'username' && (
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+            <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Name</label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} required style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
+              <button type="button" onClick={async (e) => { e.preventDefault(); await handleSave(e); }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        )}
+
+        {editingField === 'password' && (
+          <div style={{ padding: 12, borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6' }}>
+            <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Current Password</label>
+            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+              <div>
+                <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
+                <div style={{ fontSize: 13, color: '#1E40AF', marginTop: 6, fontWeight: 600 }}>Minimum 6 characters. Use mixed case, numbers, symbols for stronger password.</div>
+              </div>
+              <div>
+                <label style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700, letterSpacing: '0.5px' }}>Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '2px solid #1DB5E6', marginTop: 8, width: '100%', boxSizing: 'border-box', backgroundColor: '#f0f7ff', fontWeight: 500 }} />
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 14, color: '#1E3A8A', fontWeight: 700 }}>Strength: <span style={{ fontWeight: 900, color: '#2563EB' }}>{passwordStrength(newPassword).label}</span></div>
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={handleCancel} style={{ padding: '8px 12px', borderRadius: 8, background: '#fff', border: '2px solid #1DB5E6', cursor: 'pointer', fontWeight: 700, color: '#1E3A8A' }}>Cancel</button>
+              <button type="button" onClick={async (e) => {
+                  e.preventDefault();
+                  const token = localStorage.getItem('authToken');
+                  if (!token) { setMessage({ type: 'error', text: 'Not authenticated' }); return; }
+                  if (!currentPassword || !newPassword) { setMessage({ type: 'error', text: 'Fill passwords' }); return; }
+                  if (newPassword !== confirmPassword) { setMessage({ type: 'error', text: 'Passwords do not match' }); return; }
+                  if (newPassword.length < 6) { setMessage({ type: 'error', text: 'New password must be at least 6 characters' }); return; }
+                  setSaving(true);
+                  try {
+                    const res = await fetch(buildApiUrl('/api/user/password'), { method: 'PUT', headers: buildAuthHeaders(token, true), body: JSON.stringify({ currentPassword, newPassword }) });
+                    const j = await res.json().catch(()=>({}));
+                    if (!res.ok) { setMessage({ type: 'error', text: j.error || 'Failed to change password' }); return; }
+                    setMessage({ type: 'success', text: 'Password changed' });
+                    setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setEditingField(null);
+                  } catch (err) { setMessage({ type: 'error', text: 'Unexpected error' }); }
+                  finally { setSaving(false); }
+              }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #1DB5E6, #2563EB)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }} disabled={saving}>Change</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+
